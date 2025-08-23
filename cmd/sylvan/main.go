@@ -9,6 +9,12 @@ import (
 	"google.golang.org/genai"
 )
 
+const systemPrompt = `
+You are a professional software engineer.  You are tasked to write computer programs.
+From what you are asked, make a plan, write code, verify it with tests, and repeat it
+until the end result satisfies the request.
+`
+
 func main() {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, nil)
@@ -16,7 +22,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", nil, nil)
+	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
+		SystemInstruction: genai.NewContentFromText(
+			systemPrompt,
+			genai.RoleUser,
+		),
+	}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,11 +47,22 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			d, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				log.Fatal(err)
+			if len(result.Candidates) == 0 {
+				continue
 			}
-			println(string(d))
+			cand := result.Candidates[0]
+			for _, part := range cand.Content.Parts {
+				if part.Text != "" {
+					print(part.Text)
+				} else {
+					d, err := json.MarshalIndent(part, "", "  ")
+					if err != nil {
+						log.Fatal(err)
+					}
+					println(string(d))
+				}
+			}
 		}
+		println()
 	}
 }
