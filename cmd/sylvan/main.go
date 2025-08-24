@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 
-	"github.com/chzyer/readline"
+	"github.com/manifoldco/promptui"
 	"google.golang.org/genai"
 )
 
@@ -32,16 +33,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rl, err := readline.New("> ")
-	if err != nil {
-		panic(err)
+	p := promptui.Prompt{
+		Label: "> ",
 	}
-	defer rl.Close()
 
 	for {
-		line, err := rl.Readline()
+		line, err := p.Run()
 		if err != nil { // io.EOF
-			break
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
 		}
 		for result, err := range chat.SendMessageStream(ctx, *genai.NewPartFromText(line)) {
 			if err != nil {
