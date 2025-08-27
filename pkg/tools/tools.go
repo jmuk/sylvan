@@ -16,6 +16,7 @@ type Processor interface {
 
 var Defs = []Processor{
 	createFileDef,
+	readFileDef,
 }
 
 var defsMap = map[string]Processor{}

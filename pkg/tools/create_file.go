@@ -30,9 +30,7 @@ func createFile(req createFileRequest) createFileResponse {
 }
 
 var createFileDef = &ToolDefinition[createFileRequest, createFileResponse]{
-	name:         "createFile",
-	description:  "Create a new file with the given name and the given content",
-	requestType:  "createFileRequest",
-	responseType: "createFileResponse",
-	proc:         createFile,
+	name:        "createFile",
+	description: "Create a new file with the given name and the given content",
+	proc:        createFile,
 }

@@ -2,16 +2,15 @@ package tools
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/invopop/jsonschema"
 )
 
 type ToolDefinition[Req any, Resp any] struct {
-	name         string
-	description  string
-	requestType  string
-	responseType string
-	proc         func(req Req) Resp
+	name        string
+	description string
+	proc        func(req Req) Resp
 }
 
 func (d ToolDefinition[Req, Resp]) Name() string {
@@ -25,13 +24,15 @@ func (d ToolDefinition[Req, Resp]) Description() string {
 func (d *ToolDefinition[Req, Resp]) RequestSchema() *jsonschema.Schema {
 	var t Req
 	s := jsonschema.Reflect(&t)
-	return s.Definitions[d.requestType]
+	typeName := reflect.TypeOf(t).Name()
+	return s.Definitions[typeName]
 }
 
 func (d *ToolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
 	var t Resp
 	s := jsonschema.Reflect(&t)
-	return s.Definitions[d.responseType]
+	typeName := reflect.TypeOf(t).Name()
+	return s.Definitions[typeName]
 }
 
 func (d *ToolDefinition[Req, Resp]) process(in map[string]any) (map[string]any, error) {
