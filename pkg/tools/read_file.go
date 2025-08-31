@@ -2,7 +2,6 @@ package tools
 
 import (
 	"io"
-	"os"
 )
 
 type readFileRequest struct {
@@ -17,9 +16,9 @@ type readFileResponse struct {
 	TotalLength int64  `json:"total_length" jsonschema:"description=the total length of the file in bytes"`
 }
 
-func readFile(req readFileRequest) readFileResponse {
+func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 	if req.Offset == 0 && req.Length <= 0 {
-		data, err := os.ReadFile(req.Filename)
+		data, err := ft.root.ReadFile(req.Filename)
 		if err != nil {
 			return readFileResponse{
 				Error: err.Error(),
@@ -31,7 +30,7 @@ func readFile(req readFileRequest) readFileResponse {
 		}
 	}
 
-	s, err := os.Stat(req.Filename)
+	s, err := ft.root.Stat(req.Filename)
 	if err != nil {
 		return readFileResponse{
 			Error: err.Error(),
@@ -39,7 +38,7 @@ func readFile(req readFileRequest) readFileResponse {
 	}
 	totalLength := s.Size()
 
-	f, err := os.Open(req.Filename)
+	f, err := ft.root.Open(req.Filename)
 	if err != nil {
 		return readFileResponse{
 			Error: err.Error(),
@@ -76,10 +75,4 @@ func readFile(req readFileRequest) readFileResponse {
 			TotalLength: totalLength,
 		}
 	}
-}
-
-var readFileDef = &ToolDefinition[readFileRequest, readFileResponse]{
-	name:        "read_file",
-	description: "Read a file",
-	proc:        readFile,
 }

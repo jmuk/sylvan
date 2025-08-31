@@ -2,36 +2,33 @@ package tools
 
 import (
 	"fmt"
-
-	"github.com/invopop/jsonschema"
 )
 
-type Processor interface {
-	Name() string
-	Description() string
-	RequestSchema() *jsonschema.Schema
-	ResponseSchema() *jsonschema.Schema
-	process(in map[string]any) (map[string]any, error)
+// var Defs = []Processor{
+// 	createFileDef,
+// 	readFileDef,
+// 	modifyFileRef,
+// 	searchFilesDef,
+// 	execCommandDef,
+// }
+
+type ToolRunner struct {
+	defsMap map[string]ToolDefinition
 }
 
-var Defs = []Processor{
-	createFileDef,
-	readFileDef,
-	modifyFileRef,
-	searchFilesDef,
-	execCommandDef,
-}
-
-var defsMap = map[string]Processor{}
-
-func init() {
-	for _, d := range Defs {
-		defsMap[d.Name()] = d
+func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
+	m := make(map[string]ToolDefinition, len(defs))
+	for _, d := range defs {
+		if _, ok := m[d.Name()]; ok {
+			return nil, fmt.Errorf("duplicated tool name %s", d.Name())
+		}
+		m[d.Name()] = d
 	}
+	return &ToolRunner{defsMap: m}, nil
 }
 
-func Process(name string, in map[string]any) (map[string]any, error) {
-	p, ok := defsMap[name]
+func (r *ToolRunner) Run(name string, in map[string]any) (map[string]any, error) {
+	p, ok := r.defsMap[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown tool %s", name)
 	}

@@ -3,7 +3,6 @@ package tools
 import (
 	"fmt"
 	"log"
-	"os"
 	"sort"
 )
 
@@ -23,9 +22,9 @@ type modifyFileResponse struct {
 	Error string `json:"error" jsonschema:"description=the error message for the first modification to fail or empty if it succeeds"`
 }
 
-func modifyFile(req modifyFileRequest) modifyFileResponse {
+func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
 	log.Printf("Modify file %s", req.Filename)
-	data, err := os.ReadFile(req.Filename)
+	data, err := ft.root.ReadFile(req.Filename)
 	if err != nil {
 		log.Printf("Error reading file %s: %v", req.Filename, err)
 		return modifyFileResponse{
@@ -78,7 +77,7 @@ func modifyFile(req modifyFileRequest) modifyFileResponse {
 		strData = strData[:start] + m.Replace + strData[end:]
 	}
 
-	if err := os.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
+	if err := ft.root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
 		return modifyFileResponse{
 			Ok:    false,
 			Error: err.Error(),
@@ -87,10 +86,4 @@ func modifyFile(req modifyFileRequest) modifyFileResponse {
 	return modifyFileResponse{
 		Ok: true,
 	}
-}
-
-var modifyFileRef = &ToolDefinition[modifyFileRequest, modifyFileResponse]{
-	name:        "modify_file",
-	description: "modify the contents of a file",
-	proc:        modifyFile,
 }

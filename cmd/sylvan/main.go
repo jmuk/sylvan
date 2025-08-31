@@ -15,7 +15,19 @@ import (
 func main() {
 	ctx := context.Background()
 
-	chat, err := ai.NewGemini(ctx, "gemini-2.5-flash")
+	ft, err := tools.NewFiles(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	toolDefs := append([]tools.ToolDefinition{tools.ExecCommandDef}, ft.ToolDefs()...)
+
+	trun, err := tools.NewToolRunner(toolDefs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chat, err := ai.NewGemini(ctx, "gemini-2.5-flash", toolDefs)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +63,7 @@ func main() {
 						fmt.Print(part.Text)
 					}
 					if call := part.FunctionCall; call != nil {
-						resp, err := tools.Process(call.Name, call.Args)
+						resp, err := trun.Run(call.Name, call.Args)
 						if err != nil {
 							log.Fatal(err)
 						}

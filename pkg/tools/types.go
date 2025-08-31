@@ -6,35 +6,43 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
-type ToolDefinition[Req any, Resp any] struct {
+type ToolDefinition interface {
+	Name() string
+	Description() string
+	RequestSchema() *jsonschema.Schema
+	ResponseSchema() *jsonschema.Schema
+	process(in map[string]any) (map[string]any, error)
+}
+
+type toolDefinition[Req any, Resp any] struct {
 	name        string
 	description string
 	proc        func(req Req) Resp
 }
 
-func (d ToolDefinition[Req, Resp]) Name() string {
+func (d toolDefinition[Req, Resp]) Name() string {
 	return d.name
 }
 
-func (d ToolDefinition[Req, Resp]) Description() string {
+func (d toolDefinition[Req, Resp]) Description() string {
 	return d.description
 }
 
-func (d *ToolDefinition[Req, Resp]) RequestSchema() *jsonschema.Schema {
+func (d *toolDefinition[Req, Resp]) RequestSchema() *jsonschema.Schema {
 	var t Req
 	return (&jsonschema.Reflector{
 		DoNotReference: true,
 	}).Reflect(&t)
 }
 
-func (d *ToolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
+func (d *toolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
 	var t Resp
 	return (&jsonschema.Reflector{
 		DoNotReference: true,
 	}).Reflect(&t)
 }
 
-func (d *ToolDefinition[Req, Resp]) process(in map[string]any) (map[string]any, error) {
+func (d *toolDefinition[Req, Resp]) process(in map[string]any) (map[string]any, error) {
 	// Might not be ideal as it copies the data.
 	jsonIn, err := json.Marshal(in)
 	if err != nil {

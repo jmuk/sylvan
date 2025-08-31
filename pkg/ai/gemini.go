@@ -37,14 +37,14 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
-func NewGemini(ctx context.Context, modelName string) (*genai.Chat, error) {
+func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefinition) (*genai.Chat, error) {
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var funcs []*genai.FunctionDeclaration
-	for _, d := range tools.Defs {
+	for _, d := range toolDefs {
 		params, err := toSchema(d.RequestSchema())
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode request schema for %s: %w", d.Name(), err)

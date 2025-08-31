@@ -112,7 +112,7 @@ func execCommand(req execCommandRequest) execCommandResponse {
 	}
 }
 
-var execCommandDef = &ToolDefinition[execCommandRequest, execCommandResponse]{
+var ExecCommandDef = &toolDefinition[execCommandRequest, execCommandResponse]{
 	name:        "exec_command",
 	description: "execute a command",
 	proc:        execCommand,

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 )
@@ -22,7 +21,7 @@ type searchFilesResponse struct {
 	Error string      `json:"error"`
 }
 
-func searchFile(req searchFilesRequest) searchFilesResponse {
+func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 	if req.PathPattern == "" && req.Grep == "" {
 		return searchFilesResponse{
 			Error: "either path_pattern or grep needs to be specified",
@@ -39,7 +38,7 @@ func searchFile(req searchFilesRequest) searchFilesResponse {
 		}
 	}
 	if req.PathPattern != "" {
-		files, err := filepath.Glob(req.PathPattern)
+		files, err := fs.Glob(ft.root.FS(), req.PathPattern)
 		if err != nil {
 			return searchFilesResponse{
 				Error: err.Error(),
@@ -50,7 +49,7 @@ func searchFile(req searchFilesRequest) searchFilesResponse {
 		}
 		for _, file := range files {
 			if contentMatch != nil {
-				data, err := os.ReadFile(file)
+				data, err := ft.root.ReadFile(file)
 				if err != nil {
 					return searchFilesResponse{
 						Error: err.Error(),
@@ -60,7 +59,7 @@ func searchFile(req searchFilesRequest) searchFilesResponse {
 					continue
 				}
 			}
-			stat, err := os.Stat(file)
+			stat, err := ft.root.Stat(file)
 			if err != nil {
 				return searchFilesResponse{
 					Error: err.Error(),
@@ -78,7 +77,7 @@ func searchFile(req searchFilesRequest) searchFilesResponse {
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(path)
+		data, err := ft.root.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -96,10 +95,4 @@ func searchFile(req searchFilesRequest) searchFilesResponse {
 		}
 	}
 	return resp
-}
-
-var searchFilesDef = &ToolDefinition[searchFilesRequest, searchFilesResponse]{
-	name:        "search_files",
-	description: "return the list of file paths matching with the path patterns or contents",
-	proc:        searchFile,
 }

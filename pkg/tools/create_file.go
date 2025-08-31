@@ -1,36 +1,29 @@
 package tools
 
 import (
-	"fmt"
-	"os"
+	"log"
 )
 
-type createFileRequest struct {
+type writeFileRequest struct {
 	Filename string `json:"filename" jsonschema:"required"`
 	Content  string `json:"content" jsonschema:"required"`
 }
 
-type createFileResponse struct {
+type writeFileResponse struct {
 	Ok  bool   `json:"ok" jsonschema:"required"`
 	Err string `json:"error,omitempty"`
 }
 
-func createFile(req createFileRequest) createFileResponse {
+func (ft *FileTools) writeFile(req writeFileRequest) writeFileResponse {
 	// TODO: ask the user to go or not.
-	fmt.Println("Creating a new file", req.Filename)
-	fmt.Println("With the following content: ", req.Content)
-	err := os.WriteFile(req.Filename, []byte(req.Content), 0644)
-	resp := createFileResponse{
+	log.Print("Creating a new file", req.Filename)
+	log.Print("With the following content: ", req.Content)
+	err := ft.root.WriteFile(req.Filename, []byte(req.Content), 0644)
+	resp := writeFileResponse{
 		Ok: err == nil,
 	}
 	if err != nil {
 		resp.Err = err.Error()
 	}
 	return resp
-}
-
-var createFileDef = &ToolDefinition[createFileRequest, createFileResponse]{
-	name:        "createFile",
-	description: "Create a new file with the given name and the given content",
-	proc:        createFile,
 }
