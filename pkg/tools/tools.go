@@ -19,6 +19,7 @@ var Defs = []Processor{
 	readFileDef,
 	modifyFileRef,
 	searchFilesDef,
+	execCommandDef,
 }
 
 var defsMap = map[string]Processor{}

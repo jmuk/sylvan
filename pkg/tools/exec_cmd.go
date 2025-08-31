@@ -1,0 +1,119 @@
+package tools
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os/exec"
+	"regexp"
+	"strings"
+	"time"
+)
+
+var commandDefaultTimeout = time.Minute
+
+type execCommandRequest struct {
+	CommandLine string `json:"command_line" jsonschema:"the full command line string; note that this does not evaluate glob patterns"`
+}
+
+type execCommandResponse struct {
+	ReturnCode int    `json:"return_code" jsonschema:"description=the return code of the command; 0 means successful"`
+	Output     string `json:"output" jsonschema:"the standard output of the command"`
+	ErrorOut   string `json:"error_out" jsonschema:"the standard error output of the command"`
+}
+
+var whiteSpaces = regexp.MustCompile(`\s+`)
+
+type bufferWithViewer struct {
+	io.Writer
+	viewer *io.PipeReader
+	pipe   *io.PipeWriter
+	buffer *strings.Builder
+}
+
+func newBufferWithViewer(prefix string) *bufferWithViewer {
+	viewer, pipe := io.Pipe()
+	buffer := &strings.Builder{}
+	go func() {
+		s := bufio.NewScanner(viewer)
+		for s.Scan() {
+			line := s.Text()
+			if prefix == "" {
+				fmt.Println(line)
+			} else {
+				fmt.Println(prefix, line)
+			}
+		}
+		err := s.Err()
+		if err != nil && err != io.EOF && err != io.ErrClosedPipe {
+			log.Printf("Failed to read: %v", err)
+		}
+	}()
+	return &bufferWithViewer{
+		Writer: io.MultiWriter(pipe, buffer),
+		viewer: viewer,
+		pipe:   pipe,
+		buffer: buffer,
+	}
+}
+
+func (b *bufferWithViewer) Close() error {
+	return errors.Join(
+		b.viewer.Close(),
+		b.pipe.Close(),
+	)
+}
+
+func (b *bufferWithViewer) String() string {
+	return b.buffer.String()
+}
+
+func execCommand(req execCommandRequest) execCommandResponse {
+	log.Print("Executing ", req.CommandLine)
+	params := whiteSpaces.Split(req.CommandLine, -1)
+	log.Printf("name: %s argv: %+v", params[0], params)
+
+	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, params[0], params[1:]...)
+	stdout := newBufferWithViewer("")
+	stderr := newBufferWithViewer("error:")
+	defer stdout.Close()
+	defer stderr.Close()
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	err := cmd.Run()
+	if err != nil && !errors.Is(err, &exec.ExitError{}) {
+		return execCommandResponse{
+			ReturnCode: -1,
+			ErrorOut:   err.Error(),
+		}
+	}
+	state := cmd.ProcessState
+	if state == nil {
+		resp := execCommandResponse{
+			ReturnCode: -1,
+			ErrorOut:   "Unknown error",
+		}
+		if err != nil {
+			resp.ErrorOut = err.Error()
+		}
+		return resp
+	}
+
+	return execCommandResponse{
+		ReturnCode: state.ExitCode(),
+		Output:     stdout.String(),
+		ErrorOut:   stderr.String(),
+	}
+}
+
+var execCommandDef = &ToolDefinition[execCommandRequest, execCommandResponse]{
+	name:        "exec_command",
+	description: "execute a command",
+	proc:        execCommand,
+}
