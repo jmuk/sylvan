@@ -17,6 +17,7 @@ type readFileResponse struct {
 }
 
 func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
+	ft.logger.Debug("Reading file", "filename", req.Filename, "offset", req.Offset, "length", req.Length)
 	if req.Offset == 0 && req.Length <= 0 {
 		data, err := ft.root.ReadFile(req.Filename)
 		if err != nil {

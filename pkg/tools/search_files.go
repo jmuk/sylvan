@@ -22,6 +22,7 @@ type searchFilesResponse struct {
 }
 
 func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
+	ft.logger.Debug("Search file", "pattern", req.PathPattern, "grep", req.Grep)
 	if req.PathPattern == "" && req.Grep == "" {
 		return searchFilesResponse{
 			Error: "either path_pattern or grep needs to be specified",

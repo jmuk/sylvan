@@ -2,7 +2,6 @@ package tools
 
 import (
 	"fmt"
-	"log"
 	"sort"
 )
 
@@ -23,10 +22,11 @@ type modifyFileResponse struct {
 }
 
 func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
-	log.Printf("Modify file %s", req.Filename)
+	logger := ft.logger.With("filename", req.Filename)
+	logger.Info("Modify file")
 	data, err := ft.root.ReadFile(req.Filename)
 	if err != nil {
-		log.Printf("Error reading file %s: %v", req.Filename, err)
+		logger.Error("Error reading file", "error", err)
 		return modifyFileResponse{
 			Ok:    false,
 			Error: err.Error(),
@@ -53,9 +53,12 @@ func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
 
 	// modify from the last for the simplicity of the edit.
 	for _, m := range sortedMods {
-		log.Printf("Modifying %d-th modification", m.index)
+		mlog := logger.With(
+			"index", m.index, "offset", m.Offset,
+			"previous", m.Previous, "replace", m.Replace)
+		mlog.Debug("Modification")
 		if len(data) < int(m.Offset) || m.Offset < 0 {
-			log.Printf("Invalid modification offset %d", m.Offset)
+			mlog.Error("Invalid modification")
 			return modifyFileResponse{
 				Ok: false,
 				Error: fmt.Sprintf(
@@ -66,7 +69,7 @@ func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
 		end := start + len(m.Previous)
 		substr := strData[start:end]
 		if substr != m.Previous {
-			log.Printf("Modification %d does not match with the previous", m.Offset)
+			mlog.Error("Previous does not match")
 			return modifyFileResponse{
 				Ok: false,
 				Error: fmt.Sprintf(

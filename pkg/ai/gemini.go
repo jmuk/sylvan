@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -16,14 +16,6 @@ You are a professional software engineer.  You are tasked to write computer prog
 From what you are asked, make a plan, write code, verify it with tests, and repeat it
 until the end result satisfies the request.
 `
-
-func toInt64P(in *uint64) *int64 {
-	if in == nil {
-		return nil
-	}
-	var out int64 = int64(*in)
-	return &out
-}
 
 func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	encoded, err := json.Marshal(s)
@@ -37,7 +29,8 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
-func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefinition) (*genai.Chat, error) {
+func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefinition, handler slog.Handler) (*genai.Chat, error) {
+	logger := slog.New(handler)
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -62,11 +55,7 @@ func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefin
 		})
 	}
 
-	result, err := json.MarshalIndent(funcs, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	log.Print(string(result))
+	logger.Debug("Tool definitions", "tools", funcs)
 
 	return client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(

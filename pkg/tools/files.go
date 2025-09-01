@@ -1,23 +1,28 @@
 package tools
 
-import "os"
+import (
+	"log/slog"
+	"os"
+)
 
 // FileTools provides the tools/functions related to files
 // (read/write/update/search).  It is guarded under a
 // certain directory (typically the current directory of
 // the command started).
 type FileTools struct {
-	root *os.Root
+	root   *os.Root
+	logger *slog.Logger
 }
 
 // NewFiles creates a new FileTools in the directory.
-func NewFiles(rootPath string) (*FileTools, error) {
+func NewFiles(rootPath string, handler slog.Handler) (*FileTools, error) {
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return nil, err
 	}
 	return &FileTools{
-		root: root,
+		root:   root,
+		logger: slog.New(handler),
 	}, nil
 }
 

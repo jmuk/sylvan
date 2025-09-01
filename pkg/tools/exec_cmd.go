@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -32,9 +32,10 @@ type bufferWithViewer struct {
 	viewer *io.PipeReader
 	pipe   *io.PipeWriter
 	buffer *strings.Builder
+	logger *slog.Logger
 }
 
-func newBufferWithViewer(prefix string) *bufferWithViewer {
+func newBufferWithViewer(prefix string, logger *slog.Logger) *bufferWithViewer {
 	viewer, pipe := io.Pipe()
 	buffer := &strings.Builder{}
 	go func() {
@@ -49,7 +50,7 @@ func newBufferWithViewer(prefix string) *bufferWithViewer {
 		}
 		err := s.Err()
 		if err != nil && err != io.EOF && err != io.ErrClosedPipe {
-			log.Printf("Failed to read: %v", err)
+			slog.Error("Failed to read", "error", err)
 		}
 	}()
 	return &bufferWithViewer{
@@ -57,6 +58,7 @@ func newBufferWithViewer(prefix string) *bufferWithViewer {
 		viewer: viewer,
 		pipe:   pipe,
 		buffer: buffer,
+		logger: logger.With("prefix", prefix),
 	}
 }
 
@@ -71,16 +73,27 @@ func (b *bufferWithViewer) String() string {
 	return b.buffer.String()
 }
 
-func execCommand(req execCommandRequest) execCommandResponse {
-	log.Print("Executing ", req.CommandLine)
+type ExecTool struct {
+	logger *slog.Logger
+}
+
+func NewExecTool(h slog.Handler) *ExecTool {
+	return &ExecTool{
+		logger: slog.New(h),
+	}
+}
+
+func (et *ExecTool) execCommand(req execCommandRequest) execCommandResponse {
+	logger := et.logger.With("commandline", req.CommandLine)
+	logger.Debug("Start execution")
 	params := whiteSpaces.Split(req.CommandLine, -1)
-	log.Printf("name: %s argv: %+v", params[0], params)
+	logger = logger.With("name", params[0])
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, params[0], params[1:]...)
-	stdout := newBufferWithViewer("")
-	stderr := newBufferWithViewer("error:")
+	stdout := newBufferWithViewer("", logger)
+	stderr := newBufferWithViewer("error:", logger)
 	defer stdout.Close()
 	defer stderr.Close()
 	cmd.Stdout = stdout
@@ -88,6 +101,7 @@ func execCommand(req execCommandRequest) execCommandResponse {
 
 	err := cmd.Run()
 	if err != nil && !errors.Is(err, &exec.ExitError{}) {
+		logger.Error("Failed to execute", "error", err)
 		return execCommandResponse{
 			ReturnCode: -1,
 			ErrorOut:   err.Error(),
@@ -95,6 +109,7 @@ func execCommand(req execCommandRequest) execCommandResponse {
 	}
 	state := cmd.ProcessState
 	if state == nil {
+		logger.Error("Missing process state")
 		resp := execCommandResponse{
 			ReturnCode: -1,
 			ErrorOut:   "Unknown error",
@@ -105,6 +120,8 @@ func execCommand(req execCommandRequest) execCommandResponse {
 		return resp
 	}
 
+	logger.Debug("Execution completed", "return_code", state.ExitCode())
+
 	return execCommandResponse{
 		ReturnCode: state.ExitCode(),
 		Output:     stdout.String(),
@@ -112,8 +129,12 @@ func execCommand(req execCommandRequest) execCommandResponse {
 	}
 }
 
-var ExecCommandDef = &toolDefinition[execCommandRequest, execCommandResponse]{
-	name:        "exec_command",
-	description: "execute a command",
-	proc:        execCommand,
+func (et *ExecTool) ToolDefs() []ToolDefinition {
+	return []ToolDefinition{
+		&toolDefinition[execCommandRequest, execCommandResponse]{
+			name:        "exec_command",
+			description: "execute a command",
+			proc:        et.execCommand,
+		},
+	}
 }

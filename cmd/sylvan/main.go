@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -15,19 +18,48 @@ import (
 func main() {
 	ctx := context.Background()
 
-	ft, err := tools.NewFiles(".")
+	tempdir, err := os.MkdirTemp("", "sylvan")
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("Logs are stored into %s", tempdir)
+	toolsLog, err := os.OpenFile(filepath.Join(tempdir, "tools.log"), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer toolsLog.Close()
 
-	toolDefs := append([]tools.ToolDefinition{tools.ExecCommandDef}, ft.ToolDefs()...)
+	toolsHandler := slog.NewJSONHandler(toolsLog, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	})
+
+	aiLog, err := os.OpenFile(filepath.Join(tempdir, "ai.log"), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer aiLog.Close()
+
+	aiHandler := slog.NewJSONHandler(aiLog, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	})
+
+	ft, err := tools.NewFiles(".", toolsHandler)
+	if err != nil {
+		log.Fatal(err)
+	}
+	et := tools.NewExecTool(toolsHandler)
+
+	toolDefs := append([]tools.ToolDefinition{}, ft.ToolDefs()...)
+	toolDefs = append(toolDefs, et.ToolDefs()...)
 
 	trun, err := tools.NewToolRunner(toolDefs)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	chat, err := ai.NewGemini(ctx, "gemini-2.5-flash", toolDefs)
+	chat, err := ai.NewGemini(ctx, "gemini-2.5-flash", toolDefs, aiHandler)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,14 +74,19 @@ func main() {
 
 	for {
 		line, err := p.Run()
-		if err != nil { // io.EOF
+		if err != nil {
+			// io.EOF
 			if err == io.EOF {
 				break
 			}
 			log.Fatal(err)
 		}
+		if line == "\\q" {
+			break
+		}
 		msgs := []genai.Part{*genai.NewPartFromText(line)}
 		for {
+			printed := false
 			var nextMsgs []genai.Part
 			for result, err := range chat.SendMessageStream(ctx, msgs...) {
 				if err != nil {
@@ -61,6 +98,7 @@ func main() {
 				for _, part := range result.Candidates[0].Content.Parts {
 					if part.Text != "" {
 						fmt.Print(part.Text)
+						printed = true
 					}
 					if call := part.FunctionCall; call != nil {
 						resp, err := trun.Run(call.Name, call.Args)
@@ -77,7 +115,9 @@ func main() {
 					}
 				}
 			}
-			fmt.Println()
+			if printed {
+				fmt.Println()
+			}
 			if len(nextMsgs) == 0 {
 				break
 			}
