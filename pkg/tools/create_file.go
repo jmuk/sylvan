@@ -1,6 +1,9 @@
 package tools
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type writeFileRequest struct {
 	Filename string `json:"filename" jsonschema:"required"`
@@ -13,10 +16,28 @@ type writeFileResponse struct {
 }
 
 func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) writeFileResponse {
-	// TODO: ask the user to go or not.
 	logger := getLogger(ctx)
 	logger.Info("Creating a new file")
-	err := ft.root.WriteFile(req.Filename, []byte(req.Content), 0644)
+	fmt.Printf("Creating a new file %s with the following content...\n", req.Filename)
+	fmt.Println("---\n", req.Content)
+
+	result, err := confirm()
+	if err != nil {
+		logger.Error("Failed to confirm", "error", err)
+		return writeFileResponse{
+			Ok:  false,
+			Err: err.Error(),
+		}
+	}
+	if result != confirmationYes {
+		logger.Info("User rejected to add the file")
+		return writeFileResponse{
+			Ok:  false,
+			Err: "User rejected to write to the file",
+		}
+	}
+
+	err = ft.root.WriteFile(req.Filename, []byte(req.Content), 0644)
 	resp := writeFileResponse{
 		Ok: err == nil,
 	}

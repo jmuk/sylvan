@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+
+	"github.com/manifoldco/promptui"
 )
 
 type loggerKeyType struct{}
@@ -42,4 +44,30 @@ func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (m
 
 	ctx = context.WithValue(ctx, loggerKey, r.logger.With("tool_name", name, "request", in))
 	return p.process(ctx, in)
+}
+
+type confirmationResult int
+
+const (
+	confirmationYes confirmationResult = iota
+	confirmationNo
+	confirmationEdit
+	confirmationNoAnswer confirmationResult = -1
+)
+
+func confirm() (confirmationResult, error) {
+	sel := promptui.Select{
+		Label: "Is this okay",
+		Items: []string{
+			"Yes",
+			"No",
+			// "I change it by myself",
+		},
+		CursorPos: 1,
+	}
+	idx, _, err := sel.Run()
+	if err != nil {
+		return confirmationNoAnswer, err
+	}
+	return confirmationResult(idx), nil
 }
