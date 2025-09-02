@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -45,16 +46,16 @@ func main() {
 		Level:     slog.LevelDebug,
 	})
 
-	ft, err := tools.NewFiles(".", toolsHandler)
+	ft, err := tools.NewFiles(".")
 	if err != nil {
 		log.Fatal(err)
 	}
-	et := tools.NewExecTool(toolsHandler)
+	et := tools.NewExecTool()
 
 	toolDefs := append([]tools.ToolDefinition{}, ft.ToolDefs()...)
 	toolDefs = append(toolDefs, et.ToolDefs()...)
 
-	trun, err := tools.NewToolRunner(toolDefs)
+	trun, err := tools.NewToolRunner(toolsHandler, toolDefs)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -101,7 +102,9 @@ func main() {
 						printed = true
 					}
 					if call := part.FunctionCall; call != nil {
-						resp, err := trun.Run(call.Name, call.Args)
+						commandCtx, cancel := context.WithTimeout(ctx, time.Minute)
+						resp, err := trun.Run(commandCtx, call.Name, call.Args)
+						cancel()
 						if err != nil {
 							log.Fatal(err)
 						}

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"log/slog"
 	"os"
 )
 
@@ -10,19 +9,17 @@ import (
 // certain directory (typically the current directory of
 // the command started).
 type FileTools struct {
-	root   *os.Root
-	logger *slog.Logger
+	root *os.Root
 }
 
 // NewFiles creates a new FileTools in the directory.
-func NewFiles(rootPath string, handler slog.Handler) (*FileTools, error) {
+func NewFiles(rootPath string) (*FileTools, error) {
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		return nil, err
 	}
 	return &FileTools{
-		root:   root,
-		logger: slog.New(handler),
+		root: root,
 	}, nil
 }
 

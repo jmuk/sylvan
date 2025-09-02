@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"io"
 )
 
@@ -16,11 +17,13 @@ type readFileResponse struct {
 	TotalLength int64  `json:"total_length" jsonschema:"description=the total length of the file in bytes"`
 }
 
-func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
-	ft.logger.Debug("Reading file", "filename", req.Filename, "offset", req.Offset, "length", req.Length)
+func (ft *FileTools) readFile(ctx context.Context, req readFileRequest) readFileResponse {
+	logger := getLogger(ctx)
+	logger.Debug("Reading file")
 	if req.Offset == 0 && req.Length <= 0 {
 		data, err := ft.root.ReadFile(req.Filename)
 		if err != nil {
+			logger.Error("Failed to read", "error", err)
 			return readFileResponse{
 				Error: err.Error(),
 			}
@@ -33,6 +36,7 @@ func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 
 	s, err := ft.root.Stat(req.Filename)
 	if err != nil {
+		logger.Error("Failed to stat", "error", err)
 		return readFileResponse{
 			Error: err.Error(),
 		}
@@ -41,6 +45,7 @@ func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 
 	f, err := ft.root.Open(req.Filename)
 	if err != nil {
+		logger.Error("Failed to open", "error", err)
 		return readFileResponse{
 			Error: err.Error(),
 		}
@@ -48,6 +53,7 @@ func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 	defer f.Close()
 	if req.Offset > 0 {
 		if _, err := f.Seek(req.Offset, 0); err != nil {
+			logger.Error("Failed to seek", "error", err)
 			return readFileResponse{
 				Error: err.Error(),
 			}
@@ -56,6 +62,7 @@ func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 	if req.Length <= 0 {
 		data, err := io.ReadAll(f)
 		if err != nil {
+			logger.Error("Failed to read", "error", err)
 			return readFileResponse{
 				Error: err.Error(),
 			}
@@ -67,6 +74,7 @@ func (ft *FileTools) readFile(req readFileRequest) readFileResponse {
 	}
 	buf := make([]byte, req.Length)
 	if n, err := f.Read(buf); err != nil && err != io.EOF {
+		logger.Error("Failed to read", "error", err)
 		return readFileResponse{
 			Error: err.Error(),
 		}

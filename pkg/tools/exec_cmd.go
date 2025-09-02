@@ -74,20 +74,17 @@ func (b *bufferWithViewer) String() string {
 }
 
 type ExecTool struct {
-	logger *slog.Logger
 }
 
-func NewExecTool(h slog.Handler) *ExecTool {
-	return &ExecTool{
-		logger: slog.New(h),
-	}
+func NewExecTool() *ExecTool {
+	return &ExecTool{}
 }
 
-func (et *ExecTool) execCommand(req execCommandRequest) execCommandResponse {
-	logger := et.logger.With("commandline", req.CommandLine)
+func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) execCommandResponse {
+	logger := getLogger(ctx).With("commandline", req.CommandLine)
 	logger.Debug("Start execution")
 	params := whiteSpaces.Split(req.CommandLine, -1)
-	logger = logger.With("name", params[0])
+	logger = logger.With("command", params[0])
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
 	defer cancel()

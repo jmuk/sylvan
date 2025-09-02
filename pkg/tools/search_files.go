@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"io/fs"
 	"path/filepath"
 	"regexp"
@@ -21,8 +22,9 @@ type searchFilesResponse struct {
 	Error string      `json:"error"`
 }
 
-func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
-	ft.logger.Debug("Search file", "pattern", req.PathPattern, "grep", req.Grep)
+func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) searchFilesResponse {
+	logger := getLogger(ctx)
+	logger.Debug("Search file")
 	if req.PathPattern == "" && req.Grep == "" {
 		return searchFilesResponse{
 			Error: "either path_pattern or grep needs to be specified",
@@ -33,6 +35,7 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 		var err error
 		contentMatch, err = regexp.Compile(req.Grep)
 		if err != nil {
+			logger.Error("Failed to parse grep", "error", err)
 			return searchFilesResponse{
 				Error: err.Error(),
 			}
@@ -41,6 +44,7 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 	if req.PathPattern != "" {
 		files, err := fs.Glob(ft.root.FS(), req.PathPattern)
 		if err != nil {
+			logger.Error("Failed to glob", "error", err)
 			return searchFilesResponse{
 				Error: err.Error(),
 			}
@@ -62,6 +66,7 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 			}
 			stat, err := ft.root.Stat(file)
 			if err != nil {
+				logger.Error("Failed to stat", "filename", file, "error", err)
 				return searchFilesResponse{
 					Error: err.Error(),
 				}
@@ -71,6 +76,8 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 				IsDir: stat.IsDir(),
 			})
 		}
+		logger.Debug("Matched files", "number_of_files", len(resp.Files))
+		return resp
 	}
 
 	resp := searchFilesResponse{}
@@ -80,6 +87,7 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 		}
 		data, err := ft.root.ReadFile(path)
 		if err != nil {
+			logger.Error("Failed to read file", "filename", path, "error", err)
 			return err
 		}
 		if contentMatch.Match(data) {
@@ -91,6 +99,7 @@ func (ft *FileTools) searchFile(req searchFilesRequest) searchFilesResponse {
 		return nil
 	})
 	if err != nil {
+		logger.Error("os.Walk failed", "error", err)
 		return searchFilesResponse{
 			Error: err.Error(),
 		}

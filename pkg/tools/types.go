@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/invopop/jsonschema"
@@ -11,13 +12,13 @@ type ToolDefinition interface {
 	Description() string
 	RequestSchema() *jsonschema.Schema
 	ResponseSchema() *jsonschema.Schema
-	process(in map[string]any) (map[string]any, error)
+	process(ctx context.Context, in map[string]any) (map[string]any, error)
 }
 
 type toolDefinition[Req any, Resp any] struct {
 	name        string
 	description string
-	proc        func(req Req) Resp
+	proc        func(ctx context.Context, req Req) Resp
 }
 
 func (d toolDefinition[Req, Resp]) Name() string {
@@ -42,23 +43,28 @@ func (d *toolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
 	}).Reflect(&t)
 }
 
-func (d *toolDefinition[Req, Resp]) process(in map[string]any) (map[string]any, error) {
+func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]any) (map[string]any, error) {
 	// Might not be ideal as it copies the data.
+	logger := getLogger(ctx)
 	jsonIn, err := json.Marshal(in)
 	if err != nil {
+		logger.Error("Failed to marshal input", "error", err)
 		return nil, err
 	}
 	var req Req
 	if err := json.Unmarshal(jsonIn, &req); err != nil {
+		logger.Error("Failed to unmarshal input", "error", err)
 		return nil, err
 	}
-	resp := d.proc(req)
+	resp := d.proc(ctx, req)
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
+		logger.Error("Failed to marshal output", "error", err)
 		return nil, err
 	}
 	out := map[string]any{}
 	if err := json.Unmarshal(jsonResp, &out); err != nil {
+		logger.Error("Failed to unmarshal output", "error", err)
 		return nil, err
 	}
 	return out, nil

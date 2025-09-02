@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"sort"
 )
@@ -21,8 +22,8 @@ type modifyFileResponse struct {
 	Error string `json:"error" jsonschema:"description=the error message for the first modification to fail or empty if it succeeds"`
 }
 
-func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
-	logger := ft.logger.With("filename", req.Filename)
+func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modifyFileResponse {
+	logger := getLogger(ctx)
 	logger.Info("Modify file")
 	data, err := ft.root.ReadFile(req.Filename)
 	if err != nil {
@@ -69,7 +70,7 @@ func (ft *FileTools) modifyFile(req modifyFileRequest) modifyFileResponse {
 		end := start + len(m.Previous)
 		substr := strData[start:end]
 		if substr != m.Previous {
-			mlog.Error("Previous does not match")
+			mlog.Error("Previous does not match", "substr", substr)
 			return modifyFileResponse{
 				Ok: false,
 				Error: fmt.Sprintf(
