@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -16,35 +17,52 @@ import (
 	"google.golang.org/genai"
 )
 
+var logtostderr bool
+
+func newLogHandler(tempdir, path string) (slog.Handler, func(), error) {
+	opts := &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	}
+	if logtostderr {
+		return slog.NewJSONHandler(os.Stderr, opts), func() {}, nil
+	}
+
+	file, err := os.OpenFile(filepath.Join(tempdir, path), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, nil, err
+	}
+	return slog.NewJSONHandler(file, opts), func() { file.Close() }, nil
+}
+
 func main() {
+	flag.BoolVar(&logtostderr, "logtostderr", false, "Print out log messages to stderr")
+	flag.Parse()
+
 	ctx := context.Background()
 
-	tempdir, err := os.MkdirTemp("", "sylvan")
+	var tempdir string
+	if logtostderr {
+		tempdir = ""
+	} else {
+		var err error
+		if tempdir, err = os.MkdirTemp("", "sylvan"); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Logs are stored into %s", tempdir)
+	}
+
+	toolsHandler, toolsCleanup, err := newLogHandler(tempdir, "tools.log")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Logs are stored into %s", tempdir)
-	toolsLog, err := os.OpenFile(filepath.Join(tempdir, "tools.log"), os.O_CREATE|os.O_WRONLY, 0644)
+	defer toolsCleanup()
+
+	aiHandler, aiCleanup, err := newLogHandler(tempdir, "ai.log")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer toolsLog.Close()
-
-	toolsHandler := slog.NewJSONHandler(toolsLog, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug,
-	})
-
-	aiLog, err := os.OpenFile(filepath.Join(tempdir, "ai.log"), os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer aiLog.Close()
-
-	aiHandler := slog.NewJSONHandler(aiLog, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug,
-	})
+	defer aiCleanup()
 
 	ft, err := tools.NewFiles(".")
 	if err != nil {
@@ -73,6 +91,8 @@ func main() {
 		Label: "> ",
 	}
 
+	logger := slog.New(aiHandler)
+
 	for {
 		line, err := p.Run()
 		if err != nil {
@@ -93,6 +113,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
+				logger.Debug("Received message", "result", result)
 				if len(result.Candidates) == 0 {
 					continue
 				}
