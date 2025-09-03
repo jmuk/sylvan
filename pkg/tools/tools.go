@@ -61,7 +61,7 @@ func confirm() (confirmationResult, error) {
 		Items: []string{
 			"Yes",
 			"No",
-			// "I change it by myself",
+			"No / edit by myself",
 		},
 		CursorPos: 1,
 	}
