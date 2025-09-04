@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 type modification struct {
@@ -18,8 +20,9 @@ type modifyFileRequest struct {
 }
 
 type modifyFileResponse struct {
-	Ok    bool   `json:"ok" jsonschema:"required,description=whether all the modification has been made or not"`
-	Error string `json:"error" jsonschema:"description=the error message for the first modification to fail or empty if it succeeds"`
+	Ok         bool   `json:"ok" jsonschema:"required,description=whether all the modification has been made or not"`
+	Error      string `json:"error" jsonschema:"description=the error message for the first modification to fail or empty if it succeeds"`
+	NewContent string `json:"new_content" jsonschema:"description=the content modified by the user and actually saved"`
 }
 
 func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modifyFileResponse {
@@ -81,13 +84,49 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modi
 		strData = strData[:start] + m.Replace + strData[end:]
 	}
 
-	if err := ft.root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
+	withNewContent := false
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(string(data), strData, false)
+	fmt.Printf("Modifying %s as:", req.Filename)
+	fmt.Println(dmp.DiffPrettyText(diffs))
+	answer, err := confirm()
+	if err != nil {
+		logger.Error("Failed to confirm", "error", err)
 		return modifyFileResponse{
 			Ok:    false,
 			Error: err.Error(),
 		}
 	}
-	return modifyFileResponse{
+	if answer == confirmationEdit {
+		strData, err = userEdit(logger, req.Filename, strData)
+		if err != nil {
+			logger.Error("Failed to confirm", "error", err)
+			return modifyFileResponse{
+				Ok:    false,
+				Error: err.Error(),
+			}
+		}
+		withNewContent = true
+	} else if answer != confirmationYes {
+		logger.Error("User declined")
+		return modifyFileResponse{
+			Ok:    false,
+			Error: "User declined to accept the change",
+		}
+	}
+
+	if err := ft.root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
+		logger.Error("Failed to write the file", "error", err)
+		return modifyFileResponse{
+			Ok:    false,
+			Error: err.Error(),
+		}
+	}
+	resp := modifyFileResponse{
 		Ok: true,
 	}
+	if withNewContent {
+		resp.NewContent = strData
+	}
+	return resp
 }

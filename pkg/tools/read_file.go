@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"io"
 )
 
@@ -20,6 +21,7 @@ type readFileResponse struct {
 func (ft *FileTools) readFile(ctx context.Context, req readFileRequest) readFileResponse {
 	logger := getLogger(ctx)
 	logger.Debug("Reading file")
+	fmt.Println("Reading", req.Filename)
 	if req.Offset == 0 && req.Length <= 0 {
 		data, err := ft.root.ReadFile(req.Filename)
 		if err != nil {

@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/manifoldco/promptui"
 )
 
 var commandDefaultTimeout = time.Minute
@@ -20,9 +22,10 @@ type execCommandRequest struct {
 }
 
 type execCommandResponse struct {
-	ReturnCode int    `json:"return_code" jsonschema:"description=the return code of the command; 0 means successful"`
-	Output     string `json:"output" jsonschema:"the standard output of the command"`
-	ErrorOut   string `json:"error_out" jsonschema:"the standard error output of the command"`
+	ReturnCode  int    `json:"return_code" jsonschema:"description=the return code of the command; 0 means successful"`
+	Output      string `json:"output" jsonschema:"description=the standard output of the command"`
+	ErrorOut    string `json:"error_out" jsonschema:"description=the standard error output of the command"`
+	CommandLine string `json:"command_line" jsonschema:"description=the actual commandline to be executed"`
 }
 
 var whiteSpaces = regexp.MustCompile(`\s+`)
@@ -86,6 +89,38 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) exe
 	params := whiteSpaces.Split(req.CommandLine, -1)
 	logger = logger.With("command", params[0])
 
+	fmt.Println("Going to execute the following command:", strings.Join(params, " "))
+	answer, err := confirm()
+	if err != nil {
+		logger.Error("Failed to obtain the user answer", "error", err)
+		return execCommandResponse{
+			ReturnCode: -1,
+			ErrorOut:   err.Error(),
+		}
+	}
+	var newCommandline string
+	if answer == confirmationEdit {
+		p := promptui.Prompt{
+			Label:   ">",
+			Default: req.CommandLine,
+		}
+		newCommandline, err = p.Run()
+		if err != nil {
+			logger.Error("Failed to obtain the user answer", "error", err)
+			return execCommandResponse{
+				ReturnCode: -1,
+				ErrorOut:   err.Error(),
+			}
+		}
+		params = whiteSpaces.Split(newCommandline, -1)
+	} else if answer != confirmationYes {
+		logger.Error("User declined to execute")
+		return execCommandResponse{
+			ReturnCode: -1,
+			ErrorOut:   "user declined to execute",
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, params[0], params[1:]...)
@@ -96,7 +131,7 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) exe
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil && !errors.Is(err, &exec.ExitError{}) {
 		logger.Error("Failed to execute", "error", err)
 		return execCommandResponse{
