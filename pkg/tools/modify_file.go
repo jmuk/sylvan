@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/andreyvit/diff"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 type modification struct {
@@ -16,7 +17,8 @@ type modification struct {
 
 type modifyFileRequest struct {
 	Filename      string         `json:"filename" jsonschema:"required"`
-	Modifications []modification `json:"modifications" jsonschema:"the list of changes to make"`
+	Modifications []modification `json:"modifications" jsonschema:"description=the list of changes to make"`
+	Diff          string         `json:"diff" jsonschema:"description=the diff format string describing the change to make. Either of diff or modifications need to be specified"`
 }
 
 type modifyFileResponse struct {
@@ -28,6 +30,13 @@ type modifyFileResponse struct {
 func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modifyFileResponse {
 	logger := getLogger(ctx)
 	logger.Info("Modify file")
+	if len(req.Modifications) == 0 && req.Diff == "" {
+		logger.Error("Both modifications and diff are empty")
+		return modifyFileResponse{
+			Ok:    false,
+			Error: "both modifications and diff are empty",
+		}
+	}
 	fmt.Printf("Modifying %s\n", req.Filename)
 	data, err := ft.root.ReadFile(req.Filename)
 	if err != nil {
@@ -39,47 +48,70 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modi
 	}
 	strData := string(data)
 
-	type modWithIndex struct {
-		modification
-		index int
-	}
-	sortedMods := make([]modWithIndex, 0, len(req.Modifications))
-	for i, m := range req.Modifications {
-		sortedMods = append(sortedMods, modWithIndex{
-			modification: m,
-			index:        i,
-		})
-	}
-	sort.Slice(sortedMods, func(i, j int) bool {
-		m1 := sortedMods[i]
-		m2 := sortedMods[j]
-		return m1.Offset > m2.Offset
-	})
-
-	// modify from the last for the simplicity of the edit.
-	for _, m := range sortedMods {
-		mlog := logger.With(
-			"index", m.index, "offset", m.Offset,
-			"length", m.Length, "replace", m.Replace)
-		mlog.Debug("Modification")
-		if len(strData) < int(m.Offset) || m.Offset < 0 {
-			mlog.Error("Invalid modification")
-			return modifyFileResponse{
-				Ok: false,
-				Error: fmt.Sprintf(
-					"invalid offset %d at %d-th modification", m.Offset, m.index),
-			}
+	if len(req.Modifications) == 0 {
+		type modWithIndex struct {
+			modification
+			index int
 		}
-		start := int(m.Offset)
-		end := start + int(m.Length)
-		if end > len(strData) {
-			mlog.Error("Incalid modification")
+		sortedMods := make([]modWithIndex, 0, len(req.Modifications))
+		for i, m := range req.Modifications {
+			sortedMods = append(sortedMods, modWithIndex{
+				modification: m,
+				index:        i,
+			})
+		}
+		sort.Slice(sortedMods, func(i, j int) bool {
+			m1 := sortedMods[i]
+			m2 := sortedMods[j]
+			return m1.Offset > m2.Offset
+		})
+
+		// modify from the last for the simplicity of the edit.
+		for _, m := range sortedMods {
+			mlog := logger.With(
+				"index", m.index, "offset", m.Offset,
+				"length", m.Length, "replace", m.Replace)
+			mlog.Debug("Modification")
+			if len(strData) < int(m.Offset) || m.Offset < 0 {
+				mlog.Error("Invalid modification")
+				return modifyFileResponse{
+					Ok: false,
+					Error: fmt.Sprintf(
+						"invalid offset %d at %d-th modification", m.Offset, m.index),
+				}
+			}
+			start := int(m.Offset)
+			end := start + int(m.Length)
+			if end > len(strData) {
+				mlog.Error("Incalid modification")
+				return modifyFileResponse{
+					Ok:    false,
+					Error: fmt.Sprintf("invalid length %d at %d-th modification", m.Length, m.index),
+				}
+			}
+			strData = strData[:start] + m.Replace + strData[end:]
+		}
+	} else {
+		dmp := diffmatchpatch.New()
+		patches, err := dmp.PatchFromText(req.Diff)
+		if err != nil {
+			logger.Error("Failed to create patches from diff", "error", err)
 			return modifyFileResponse{
 				Ok:    false,
-				Error: fmt.Sprintf("invalid length %d at %d-th modification", m.Length, m.index),
+				Error: err.Error(),
 			}
 		}
-		strData = strData[:start] + m.Replace + strData[end:]
+		var applied []bool
+		strData, applied = dmp.PatchApply(patches, strData)
+		for i, a := range applied {
+			if !a {
+				logger.Error("Failed to apply hunk", "hunk-id", i)
+				return modifyFileResponse{
+					Ok:    false,
+					Error: fmt.Sprintf("Failed to apply %d-th hunk of diff", i),
+				}
+			}
+		}
 	}
 
 	withNewContent := false
