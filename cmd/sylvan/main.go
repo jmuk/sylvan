@@ -114,7 +114,7 @@ func main() {
 					log.Fatal(err)
 				}
 				logger.Debug("Received message", "result", result)
-				if len(result.Candidates) == 0 {
+				if len(result.Candidates) == 0 || result.Candidates[0].Content == nil {
 					continue
 				}
 				for _, part := range result.Candidates[0].Content.Parts {

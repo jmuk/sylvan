@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/andreyvit/diff"
 )
 
 type modification struct {
-	Offset   int64  `json:"offset" jsonschema:"required,description=the offset starting point in bytes to be changed"`
-	Previous string `json:"previous" jsonschema:"required,description=the content before the modification"`
-	Replace  string `json:"replace" jsonschema:"required,description=the new content to replace the previous content"`
+	Offset  int64  `json:"offset" jsonschema:"required,description=the offset starting point in bytes to be changed"`
+	Length  int64  `json:"length" jsonschema:"required,description=the length of the parts to be modified"`
+	Replace string `json:"replace" jsonschema:"required,description=the new content to replace the previous content"`
 }
 
 type modifyFileRequest struct {
@@ -28,6 +28,7 @@ type modifyFileResponse struct {
 func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modifyFileResponse {
 	logger := getLogger(ctx)
 	logger.Info("Modify file")
+	fmt.Printf("Modifying %s\n", req.Filename)
 	data, err := ft.root.ReadFile(req.Filename)
 	if err != nil {
 		logger.Error("Error reading file", "error", err)
@@ -59,9 +60,9 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modi
 	for _, m := range sortedMods {
 		mlog := logger.With(
 			"index", m.index, "offset", m.Offset,
-			"previous", m.Previous, "replace", m.Replace)
+			"length", m.Length, "replace", m.Replace)
 		mlog.Debug("Modification")
-		if len(data) < int(m.Offset) || m.Offset < 0 {
+		if len(strData) < int(m.Offset) || m.Offset < 0 {
 			mlog.Error("Invalid modification")
 			return modifyFileResponse{
 				Ok: false,
@@ -70,25 +71,19 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) modi
 			}
 		}
 		start := int(m.Offset)
-		end := start + len(m.Previous)
-		substr := strData[start:end]
-		if substr != m.Previous {
-			mlog.Error("Previous does not match", "substr", substr)
+		end := start + int(m.Length)
+		if end > len(strData) {
+			mlog.Error("Incalid modification")
 			return modifyFileResponse{
-				Ok: false,
-				Error: fmt.Sprintf(
-					"previous %s does not match with the content %s at %d-th modification",
-					m.Previous, substr, m.index),
+				Ok:    false,
+				Error: fmt.Sprintf("invalid length %d at %d-th modification", m.Length, m.index),
 			}
 		}
 		strData = strData[:start] + m.Replace + strData[end:]
 	}
 
 	withNewContent := false
-	dmp := diffmatchpatch.New()
-	diffs := dmp.DiffMain(string(data), strData, false)
-	fmt.Printf("Modifying %s as:", req.Filename)
-	fmt.Println(dmp.DiffPrettyText(diffs))
+	fmt.Println(diff.LineDiff(string(data), strData))
 	answer, err := confirm()
 	if err != nil {
 		logger.Error("Failed to confirm", "error", err)

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"regexp"
@@ -32,6 +33,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 	}
 	var contentMatch *regexp.Regexp
 	if req.Grep != "" {
+		fmt.Printf("Searching for %s\n", req.PathPattern)
 		var err error
 		contentMatch, err = regexp.Compile(req.Grep)
 		if err != nil {
@@ -42,6 +44,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 		}
 	}
 	if req.PathPattern != "" {
+		fmt.Printf("Searching for %s with %s\n", req.PathPattern, req.Grep)
 		files, err := fs.Glob(ft.root.FS(), req.PathPattern)
 		if err != nil {
 			logger.Error("Failed to glob", "error", err)
@@ -81,6 +84,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 	}
 
 	resp := searchFilesResponse{}
+	fmt.Printf("Searching with %s\n", req.Grep)
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
