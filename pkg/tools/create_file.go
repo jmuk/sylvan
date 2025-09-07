@@ -2,7 +2,10 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 type writeFileRequest struct {
@@ -17,46 +20,58 @@ type writeFileResponse struct {
 }
 
 func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) writeFileResponse {
+	content, err := ft.writeFileInternal(ctx, req.Filename, req.Content)
+	resp := writeFileResponse{
+		Ok:      err != nil,
+		Content: content,
+	}
+	if err != nil {
+		resp.Err = err.Error()
+	}
+	return resp
+}
+
+func (ft *FileTools) writeFileInternal(ctx context.Context, filename, content string) (newContent string, err error) {
 	logger := getLogger(ctx)
 	logger.Info("Creating a new file")
-	fmt.Printf("Creating a new file %s with the following content...\n", req.Filename)
-	fmt.Println("---\n", req.Content)
+	fmt.Printf("Creating a new file %s with the following content...\n", filename)
+	fmt.Println("---\n", content)
 
 	result, err := confirm()
 	if err != nil {
 		logger.Error("Failed to confirm", "error", err)
-		return writeFileResponse{
-			Ok:  false,
-			Err: err.Error(),
-		}
+		return "", err
 	}
 	if result == confirmationEdit {
 		logger.Info("User wants to edit")
-		req.Content, err = userEdit(logger, req.Filename, req.Content)
+		content, err = userEdit(logger, filename, content)
 		if err != nil {
-			return writeFileResponse{
-				Ok:  false,
-				Err: err.Error(),
-			}
+			return "", err
 		}
 	} else if result != confirmationYes {
 		logger.Info("User rejected to add the file")
-		return writeFileResponse{
-			Ok:  false,
-			Err: "User rejected to write to the file",
-		}
+		return "", errors.New("user rejected to write to the file")
 	}
 
-	err = ft.root.WriteFile(req.Filename, []byte(req.Content), 0644)
-	resp := writeFileResponse{
-		Ok: err == nil,
+	dirname := filepath.Dir(filename)
+	if _, err := ft.root.Stat(dirname); os.IsNotExist(err) {
+		fmt.Printf("Creating directory %s\n", dirname)
+		logger.Info("Creating directory", "dirname", dirname)
+		if err := ft.root.MkdirAll(dirname, 0755); err != nil {
+			logger.Error("Failed to create directory", "dirname", dirname, "error", err)
+			return "", err
+		}
+	} else if err != nil {
+		logger.Info("Failed to check directory", "dirname", dirname, "error", err)
+		return "", err
 	}
+
+	err = ft.root.WriteFile(filename, []byte(content), 0644)
 	if err != nil {
 		logger.Error("Failed to write", "error", err)
-		resp.Err = err.Error()
 	}
-	if resp.Ok && result == confirmationEdit {
-		resp.Content = req.Content
+	if err == nil && result == confirmationEdit {
+		return content, nil
 	}
-	return resp
+	return "", err
 }
