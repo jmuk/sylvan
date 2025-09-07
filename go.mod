@@ -6,6 +6,7 @@ require (
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/invopop/jsonschema v0.13.0
 	github.com/manifoldco/promptui v0.9.0
+	github.com/sergi/go-diff v1.4.0
 	google.golang.org/genai v1.21.0
 )
 
@@ -22,7 +23,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.27.0 // indirect
