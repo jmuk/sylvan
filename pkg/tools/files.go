@@ -50,5 +50,10 @@ func (ft *FileTools) ToolDefs() []ToolDefinition {
 			description: "modify the contents of a file",
 			proc:        ft.modifyFile,
 		},
+		&toolDefinition[deleteFileRequest, deleteFileResponse]{
+			name:        "delete_file",
+			description: "delete a file",
+			proc:        ft.deleteFile,
+		},
 	}
 }

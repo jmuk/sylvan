@@ -56,13 +56,17 @@ const (
 )
 
 func confirm() (confirmationResult, error) {
+	return confirmWith(true)
+}
+
+func confirmWith(canEdit bool) (confirmationResult, error) {
+	items := []string{"Yes", "No"}
+	if canEdit {
+		items = append(items, "No / edit by myself")
+	}
 	sel := promptui.Select{
-		Label: "Is this okay",
-		Items: []string{
-			"Yes",
-			"No",
-			"No / edit by myself",
-		},
+		Label:     "Is this okay",
+		Items:     items,
 		CursorPos: 1,
 	}
 	idx, _, err := sel.Run()
