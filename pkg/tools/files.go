@@ -55,5 +55,10 @@ func (ft *FileTools) ToolDefs() []ToolDefinition {
 			description: "delete a file",
 			proc:        ft.deleteFile,
 		},
+		&toolDefinition[createDirRequest, createDirResponse]{
+			name:        "create_directory",
+			description: "create a new directory",
+			proc:        ft.createDir,
+		},
 	}
 }
