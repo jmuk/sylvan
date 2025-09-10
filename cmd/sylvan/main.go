@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -74,7 +74,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	aiChat, err := ai.NewGemini(ctx, "gemini-2.5-flash", toolDefs, aiHandler)
+	config, err := config.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	aiChat, err := config.NewChat(ctx, toolDefs)
 	if err != nil {
 		log.Fatal(err)
 	}

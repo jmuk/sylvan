@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -53,9 +52,13 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
-func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefinition, handler slog.Handler) (*genai.Chat, error) {
-	logger := slog.New(handler)
-	client, err := genai.NewClient(ctx, nil)
+func NewGemini(
+	ctx context.Context,
+	modelName string,
+	clientConfig *genai.ClientConfig,
+	toolDefs []tools.ToolDefinition,
+) (*genai.Chat, error) {
+	client, err := genai.NewClient(ctx, clientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +81,6 @@ func NewGemini(ctx context.Context, modelName string, toolDefs []tools.ToolDefin
 			Response:    resp,
 		})
 	}
-
-	logger.Debug("Tool definitions", "tools", funcs)
 
 	return client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(

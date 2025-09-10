@@ -3,6 +3,7 @@ module github.com/jmuk/sylvan
 go 1.25.0
 
 require (
+	github.com/BurntSushi/toml v1.5.0
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/invopop/jsonschema v0.13.0
 	github.com/manifoldco/promptui v0.9.0
