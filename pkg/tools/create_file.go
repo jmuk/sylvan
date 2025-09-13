@@ -71,7 +71,7 @@ func (ft *FileTools) writeFileInternal(ctx context.Context, filename, content st
 		logger.Error("Failed to write", "error", err)
 		return "", err
 	}
-	if err == nil && result == confirmationEdit {
+	if result == confirmationEdit {
 		return content, nil
 	}
 	return "", nil
