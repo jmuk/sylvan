@@ -22,7 +22,7 @@ type writeFileResponse struct {
 func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) writeFileResponse {
 	content, err := ft.writeFileInternal(ctx, req.Filename, req.Content)
 	resp := writeFileResponse{
-		Ok:      err != nil,
+		Ok:      err == nil,
 		Content: content,
 	}
 	if err != nil {
@@ -69,9 +69,10 @@ func (ft *FileTools) writeFileInternal(ctx context.Context, filename, content st
 	err = ft.root.WriteFile(filename, []byte(content), 0644)
 	if err != nil {
 		logger.Error("Failed to write", "error", err)
+		return "", err
 	}
 	if err == nil && result == confirmationEdit {
 		return content, nil
 	}
-	return "", err
+	return "", nil
 }
