@@ -9,12 +9,13 @@ import (
 )
 
 type GeminiConfig struct {
-	ConfigName string `toml:"name"`
-	ModelName  string `toml:"model_name"`
-	APIKey     string `toml:"api_key,omitempty"`
-	Backend    string `toml:"backend,omitempty"`
-	Project    string `toml:"project,omitempty"`
-	Location   string `toml:"location,omitempty"`
+	ConfigName      string `toml:"name"`
+	ModelName       string `toml:"model_name"`
+	APIKey          string `toml:"api_key,omitempty"`
+	Backend         string `toml:"backend,omitempty"`
+	Project         string `toml:"project,omitempty"`
+	Location        string `toml:"location,omitempty"`
+	excludeThoughts bool   `toml:"excludeThoughts,omitempty"`
 }
 
 func (gc *GeminiConfig) hiddenMethod() {
@@ -39,5 +40,5 @@ func (gc *GeminiConfig) NewChat(
 		Backend:  backend,
 		Project:  gc.Project,
 		Location: gc.Location,
-	}, toolDefs)
+	}, toolDefs, !gc.excludeThoughts)
 }

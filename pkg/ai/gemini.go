@@ -57,6 +57,7 @@ func NewGemini(
 	modelName string,
 	clientConfig *genai.ClientConfig,
 	toolDefs []tools.ToolDefinition,
+	includeThoughts bool,
 ) (*genai.Chat, error) {
 	client, err := genai.NewClient(ctx, clientConfig)
 	if err != nil {
@@ -88,5 +89,8 @@ func NewGemini(
 			genai.RoleUser,
 		),
 		Tools: []*genai.Tool{{FunctionDeclarations: funcs}},
+		ThinkingConfig: &genai.ThinkingConfig{
+			IncludeThoughts: includeThoughts,
+		},
 	}, nil)
 }
