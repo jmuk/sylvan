@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
-	"google.golang.org/genai"
 )
 
 type ModelType string
@@ -25,7 +25,7 @@ type ModelConfig interface {
 	// TODO: add common interface for chat
 	NewChat(ctx context.Context,
 		tools []tools.ToolDefinition,
-	) (*genai.Chat, error)
+	) (ai.Agent, error)
 }
 
 type Config struct {
@@ -101,7 +101,7 @@ func (c *Config) UnmarshalTOML(input any) error {
 
 func (c *Config) NewChat(ctx context.Context,
 	toolDefs []tools.ToolDefinition,
-) (*genai.Chat, error) {
+) (ai.Agent, error) {
 	for _, modelConfig := range c.ModelConfigs {
 		if modelConfig.Name() == c.ModelName {
 			return modelConfig.NewChat(ctx, toolDefs)

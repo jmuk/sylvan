@@ -28,7 +28,7 @@ func (gc *GeminiConfig) Name() string {
 func (gc *GeminiConfig) NewChat(
 	ctx context.Context,
 	toolDefs []tools.ToolDefinition,
-) (*genai.Chat, error) {
+) (ai.Agent, error) {
 	backend := genai.BackendUnspecified
 	if gc.Backend == genai.BackendGeminiAPI.String() {
 		backend = genai.BackendGeminiAPI

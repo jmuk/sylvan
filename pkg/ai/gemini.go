@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -52,13 +53,64 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
+type GeminiAgent struct {
+	chat *genai.Chat
+}
+
+func (g *GeminiAgent) SendMessageStream(ctx context.Context, parts []Part) iter.Seq2[*Part, error] {
+	return func(yield func(*Part, error) bool) {
+		inputParts := make([]*genai.Part, 0, len(parts))
+		for _, part := range parts {
+			p := &genai.Part{}
+			if part.Text != "" {
+				p.Text = part.Text
+			}
+			if part.FunctionResponse != nil {
+				p.FunctionResponse = &genai.FunctionResponse{
+					ID:       part.FunctionResponse.ID,
+					Name:     part.FunctionResponse.Name,
+					Response: part.FunctionResponse.Response,
+				}
+			}
+			inputParts = append(inputParts, p)
+		}
+		for result, err := range g.chat.SendStream(ctx, inputParts...) {
+			if err != nil {
+				if !yield(nil, err) {
+					return
+				}
+			}
+			if len(result.Candidates) == 0 || result.Candidates[0].Content == nil {
+				continue
+			}
+			for _, part := range result.Candidates[0].Content.Parts {
+				p := &Part{}
+				if part.FunctionCall != nil {
+					p.FunctionCall = &FunctionCall{
+						ID:   part.FunctionCall.ID,
+						Name: part.FunctionCall.Name,
+						Args: part.FunctionCall.Args,
+					}
+				}
+				if part.Text != "" {
+					p.Text = part.Text
+					p.Thought = part.Thought
+				}
+				if !yield(p, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
 func NewGemini(
 	ctx context.Context,
 	modelName string,
 	clientConfig *genai.ClientConfig,
 	toolDefs []tools.ToolDefinition,
 	includeThoughts bool,
-) (*genai.Chat, error) {
+) (*GeminiAgent, error) {
 	client, err := genai.NewClient(ctx, clientConfig)
 	if err != nil {
 		return nil, err
@@ -83,7 +135,7 @@ func NewGemini(
 		})
 	}
 
-	return client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
+	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
 			systemPrompt,
 			genai.RoleUser,
@@ -93,4 +145,8 @@ func NewGemini(
 			IncludeThoughts: includeThoughts,
 		},
 	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &GeminiAgent{chat: chat}, nil
 }
