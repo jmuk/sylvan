@@ -5,6 +5,13 @@ import (
 	"iter"
 )
 
+type Role string
+
+const (
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+)
+
 type FunctionCall struct {
 	ID   string
 	Name string

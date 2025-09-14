@@ -1,4 +1,4 @@
-package ai
+package gemini
 
 import (
 	"context"
@@ -7,39 +7,10 @@ import (
 	"iter"
 
 	"github.com/invopop/jsonschema"
+	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"google.golang.org/genai"
 )
-
-const systemPrompt = `
-You are a seasoned software engineer.  Your task is to provide the technical solution
-for what the user asked.  Please follow the steps below to pursue the goal. Please
-also write your thoughts step-by-step as much as possible.
-
-1. Plan
-
-The request is often vague, and therefore you will have to set up a list of concrete
-tasks to achieve the goal.  First, you set up the plan, the list of things you'll do,
-and show it to the users.
-
-2. Investigate the code base
-
-Often times you are tasked to make changes on an existing code base.  Check the current
-status and align the plan and your outcome with the existing code base.  Read the files,
-documentations, etc. when necessary.
-
-3. Tests
-
-As a seasoned software engineer, you'll adopt test-driven-development (TDD) whenever
-applicable. Before implementing the solution, first set up the tests, add new test
-cases, or modify the tests. Then run the test scenarios and confirm that those tests
-_fail_, because the actual solution hasn't been provided yet.
-
-4. Code
-
-Then you write the code, and make sure that the tests now _pass_. Note that the test
-code must not be modified during this step.
-`
 
 func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	encoded, err := json.Marshal(s)
@@ -53,12 +24,12 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
-type GeminiAgent struct {
+type Agent struct {
 	chat *genai.Chat
 }
 
-func (g *GeminiAgent) SendMessageStream(ctx context.Context, parts []Part) iter.Seq2[*Part, error] {
-	return func(yield func(*Part, error) bool) {
+func (g *Agent) SendMessageStream(ctx context.Context, parts []ai.Part) iter.Seq2[*ai.Part, error] {
+	return func(yield func(*ai.Part, error) bool) {
 		inputParts := make([]*genai.Part, 0, len(parts))
 		for _, part := range parts {
 			p := &genai.Part{}
@@ -84,9 +55,9 @@ func (g *GeminiAgent) SendMessageStream(ctx context.Context, parts []Part) iter.
 				continue
 			}
 			for _, part := range result.Candidates[0].Content.Parts {
-				p := &Part{}
+				p := &ai.Part{}
 				if part.FunctionCall != nil {
-					p.FunctionCall = &FunctionCall{
+					p.FunctionCall = &ai.FunctionCall{
 						ID:   part.FunctionCall.ID,
 						Name: part.FunctionCall.Name,
 						Args: part.FunctionCall.Args,
@@ -104,13 +75,13 @@ func (g *GeminiAgent) SendMessageStream(ctx context.Context, parts []Part) iter.
 	}
 }
 
-func NewGemini(
+func New(
 	ctx context.Context,
 	modelName string,
 	clientConfig *genai.ClientConfig,
 	toolDefs []tools.ToolDefinition,
 	includeThoughts bool,
-) (*GeminiAgent, error) {
+) (*Agent, error) {
 	client, err := genai.NewClient(ctx, clientConfig)
 	if err != nil {
 		return nil, err
@@ -137,7 +108,7 @@ func NewGemini(
 
 	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
-			systemPrompt,
+			ai.SystemPrompt,
 			genai.RoleUser,
 		),
 		Tools: []*genai.Tool{{FunctionDeclarations: funcs}},
@@ -148,5 +119,5 @@ func NewGemini(
 	if err != nil {
 		return nil, err
 	}
-	return &GeminiAgent{chat: chat}, nil
+	return &Agent{chat: chat}, nil
 }

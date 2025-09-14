@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/ai/gemini"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -20,7 +21,6 @@ const (
 )
 
 type ModelConfig interface {
-	hiddenMethod()
 	Name() string
 	// TODO: add common interface for chat
 	NewChat(ctx context.Context,
@@ -89,7 +89,7 @@ func (c *Config) UnmarshalTOML(input any) error {
 			if err != nil {
 				return fmt.Errorf(`failed to marshal %d-th config: %w`, i, err)
 			}
-			geminiConfig := &GeminiConfig{}
+			geminiConfig := &gemini.Config{}
 			if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
 				return fmt.Errorf(`failed to parse %d-th config: %w`, i, err)
 			}
@@ -113,7 +113,7 @@ func (c *Config) NewChat(ctx context.Context,
 func LoadConfig() (*Config, error) {
 	config := &Config{
 		ModelConfigs: []ModelConfig{
-			&GeminiConfig{
+			&gemini.Config{
 				ConfigName: "gemini",
 				ModelName:  "gemini-2.5-flash",
 			},

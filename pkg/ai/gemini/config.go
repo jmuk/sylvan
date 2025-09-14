@@ -1,4 +1,4 @@
-package config
+package gemini
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"google.golang.org/genai"
 )
 
-type GeminiConfig struct {
+type Config struct {
 	ConfigName      string `toml:"name"`
 	ModelName       string `toml:"model_name"`
 	APIKey          string `toml:"api_key,omitempty"`
@@ -18,14 +18,11 @@ type GeminiConfig struct {
 	excludeThoughts bool   `toml:"excludeThoughts,omitempty"`
 }
 
-func (gc *GeminiConfig) hiddenMethod() {
-}
-
-func (gc *GeminiConfig) Name() string {
+func (gc *Config) Name() string {
 	return gc.ConfigName
 }
 
-func (gc *GeminiConfig) NewChat(
+func (gc *Config) NewChat(
 	ctx context.Context,
 	toolDefs []tools.ToolDefinition,
 ) (ai.Agent, error) {
@@ -35,7 +32,7 @@ func (gc *GeminiConfig) NewChat(
 	} else if gc.Backend == genai.BackendVertexAI.String() {
 		backend = genai.BackendVertexAI
 	}
-	return ai.NewGemini(ctx, gc.ModelName, &genai.ClientConfig{
+	return New(ctx, gc.ModelName, &genai.ClientConfig{
 		APIKey:   gc.APIKey,
 		Backend:  backend,
 		Project:  gc.Project,
