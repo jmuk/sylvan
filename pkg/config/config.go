@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/ai/claude"
 	"github.com/jmuk/sylvan/pkg/ai/gemini"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
@@ -18,6 +19,7 @@ type ModelType string
 
 const (
 	ModelTypeGemini ModelType = "gemini"
+	ModelTypeClaude ModelType = "claude"
 )
 
 type ModelConfig interface {
@@ -84,16 +86,30 @@ func (c *Config) UnmarshalTOML(input any) error {
 		return fmt.Errorf(`model_configs: want []map[string]any got %T`, modelsData)
 	}
 	for i, modelConfig := range models {
-		if modelConfig["type"] == string(ModelTypeGemini) {
-			marshaled, err := toml.Marshal(modelConfig)
-			if err != nil {
-				return fmt.Errorf(`failed to marshal %d-th config: %w`, i, err)
-			}
+		mtData, ok := modelConfig["type"]
+		if !ok {
+			return fmt.Errorf("missing field type for model config")
+		}
+		mtStr, ok := mtData.(string)
+		if !ok {
+			return fmt.Errorf("type mismatch for type field: want string got %T", mtData)
+		}
+		marshaled, err := toml.Marshal(modelConfig)
+		if err != nil {
+			return fmt.Errorf(`failed to marshal %d-th config: %w`, i, err)
+		}
+		switch ModelType(mtStr) {
+		case ModelTypeGemini:
 			geminiConfig := &gemini.Config{}
 			if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
 				return fmt.Errorf(`failed to parse %d-th config: %w`, i, err)
 			}
 			c.ModelConfigs = append(c.ModelConfigs, geminiConfig)
+		case ModelTypeClaude:
+			claudeConfig := &claude.Config{}
+			if err := toml.Unmarshal(marshaled, claudeConfig); err != nil {
+				return fmt.Errorf(`failed to aprse %d-th config: %w`, i, err)
+			}
 		}
 	}
 	return nil
