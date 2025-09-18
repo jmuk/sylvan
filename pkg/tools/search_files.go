@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -20,16 +21,13 @@ type fileEntry struct {
 
 type searchFilesResponse struct {
 	Files []fileEntry `json:"files"`
-	Error string      `json:"error"`
 }
 
-func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) searchFilesResponse {
+func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) (*searchFilesResponse, error) {
 	logger := getLogger(ctx)
 	logger.Debug("Search file")
 	if req.PathPattern == "" && req.Grep == "" {
-		return searchFilesResponse{
-			Error: "either path_pattern or grep needs to be specified",
-		}
+		return nil, &ToolError{errors.New("either path_pattern or grep needs to be specified")}
 	}
 	var contentMatch *regexp.Regexp
 	if req.Grep != "" {
@@ -38,9 +36,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 		contentMatch, err = regexp.Compile(req.Grep)
 		if err != nil {
 			logger.Error("Failed to parse grep", "error", err)
-			return searchFilesResponse{
-				Error: err.Error(),
-			}
+			return nil, &ToolError{err}
 		}
 	}
 	if req.PathPattern != "" {
@@ -48,20 +44,16 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 		files, err := fs.Glob(ft.root.FS(), req.PathPattern)
 		if err != nil {
 			logger.Error("Failed to glob", "error", err)
-			return searchFilesResponse{
-				Error: err.Error(),
-			}
+			return nil, &ToolError{err}
 		}
-		resp := searchFilesResponse{
+		resp := &searchFilesResponse{
 			Files: make([]fileEntry, 0, len(files)),
 		}
 		for _, file := range files {
 			if contentMatch != nil {
 				data, err := ft.root.ReadFile(file)
 				if err != nil {
-					return searchFilesResponse{
-						Error: err.Error(),
-					}
+					return nil, &ToolError{err}
 				}
 				if !contentMatch.Match(data) {
 					continue
@@ -70,9 +62,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 			stat, err := ft.root.Stat(file)
 			if err != nil {
 				logger.Error("Failed to stat", "filename", file, "error", err)
-				return searchFilesResponse{
-					Error: err.Error(),
-				}
+				return nil, &ToolError{err}
 			}
 			resp.Files = append(resp.Files, fileEntry{
 				Path:  file,
@@ -80,10 +70,10 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 			})
 		}
 		logger.Debug("Matched files", "number_of_files", len(resp.Files))
-		return resp
+		return resp, nil
 	}
 
-	resp := searchFilesResponse{}
+	resp := &searchFilesResponse{}
 	fmt.Printf("Searching with %s\n", req.Grep)
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -104,9 +94,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) sea
 	})
 	if err != nil {
 		logger.Error("os.Walk failed", "error", err)
-		return searchFilesResponse{
-			Error: err.Error(),
-		}
+		return nil, &ToolError{err}
 	}
-	return resp
+	return resp, nil
 }

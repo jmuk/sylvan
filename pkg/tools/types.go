@@ -3,9 +3,26 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 
 	"github.com/invopop/jsonschema"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
+
+// ToolError is a type of error that should be reported to agent.
+type ToolError struct {
+	err error
+}
+
+// Error implements error type.
+func (e *ToolError) Error() string {
+	return e.err.Error()
+}
+
+// Unwrap implements unwrapping.
+func (e *ToolError) Unwrap() error {
+	return e.err
+}
 
 type ToolDefinition interface {
 	Name() string
@@ -18,7 +35,10 @@ type ToolDefinition interface {
 type toolDefinition[Req any, Resp any] struct {
 	name        string
 	description string
-	proc        func(ctx context.Context, req Req) Resp
+	proc        func(ctx context.Context, req Req) (Resp, error)
+
+	respName        string
+	respDescription string
 }
 
 func (d toolDefinition[Req, Resp]) Name() string {
@@ -38,9 +58,35 @@ func (d *toolDefinition[Req, Resp]) RequestSchema() *jsonschema.Schema {
 
 func (d *toolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
 	var t Resp
-	return (&jsonschema.Reflector{
-		DoNotReference: true,
-	}).Reflect(&t)
+	var schema *jsonschema.Schema
+	if reflect.TypeFor[Resp]().ConvertibleTo(reflect.TypeFor[string]()) {
+		schema = &jsonschema.Schema{
+			Version: jsonschema.Version,
+			Type:    "object",
+			Properties: orderedmap.New[string, *jsonschema.Schema](
+				orderedmap.WithInitialData[string, *jsonschema.Schema](
+					orderedmap.Pair[string, *jsonschema.Schema]{
+						Key: d.respName,
+						Value: &jsonschema.Schema{
+							Type:        "string",
+							Description: d.respDescription,
+						},
+					},
+				)),
+		}
+	} else {
+		schema = (&jsonschema.Reflector{
+			DoNotReference: true,
+		}).Reflect(&t)
+	}
+	schema.Properties.AddPairs(orderedmap.Pair[string, *jsonschema.Schema]{
+		Key: "error",
+		Value: &jsonschema.Schema{
+			Type:        "string",
+			Description: "the error message when the command failed, or empty",
+		},
+	})
+	return schema
 }
 
 func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]any) (map[string]any, error) {
@@ -56,7 +102,15 @@ func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]a
 		logger.Error("Failed to unmarshal input", "error", err)
 		return nil, err
 	}
-	resp := d.proc(ctx, req)
+	resp, err := d.proc(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if v := reflect.ValueOf(resp); v.CanConvert(reflect.TypeFor[string]()) {
+		return map[string]any{
+			d.respName: v.Convert(reflect.TypeFor[string]()).String(),
+		}, nil
+	}
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
 		logger.Error("Failed to marshal output", "error", err)

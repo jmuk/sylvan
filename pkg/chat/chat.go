@@ -70,13 +70,18 @@ func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 				resp, err := c.trun.Run(commandCtx, call.Name, call.Args)
 				cancel()
 				if err != nil {
-					return err
+					var toolErr *tools.ToolError
+					if !errors.As(err, &toolErr) {
+						return err
+					}
+					err = toolErr.Unwrap()
 				}
 				nextMsgs = append(nextMsgs, ai.Part{
 					FunctionResponse: &ai.FunctionResponse{
 						ID:       part.FunctionCall.ID,
 						Name:     part.FunctionCall.Name,
 						Response: resp,
+						Error:    err,
 					},
 				})
 			}

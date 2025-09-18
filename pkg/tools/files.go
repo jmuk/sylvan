@@ -30,32 +30,36 @@ func (ft *FileTools) Close() error {
 
 func (ft *FileTools) ToolDefs() []ToolDefinition {
 	return []ToolDefinition{
-		&toolDefinition[readFileRequest, readFileResponse]{
+		&toolDefinition[readFileRequest, *readFileResponse]{
 			name:        "read_file",
 			description: "Read a file",
 			proc:        ft.readFile,
 		},
-		&toolDefinition[searchFilesRequest, searchFilesResponse]{
+		&toolDefinition[searchFilesRequest, *searchFilesResponse]{
 			name:        "search_files",
 			description: "return the list of file paths matching with the path patterns or contents",
 			proc:        ft.searchFile,
 		},
-		&toolDefinition[writeFileRequest, writeFileResponse]{
-			name:        "write_file",
-			description: "Write the content to a file; overwriting an existing one or create a new file",
-			proc:        ft.writeFile,
+		&toolDefinition[writeFileRequest, string]{
+			name:            "write_file",
+			description:     "Write the content to a file; overwriting an existing one or create a new file",
+			proc:            ft.writeFile,
+			respName:        "new_content",
+			respDescription: "the content to be stored in the file in case it's different from the request",
 		},
-		&toolDefinition[modifyFileRequest, modifyFileResponse]{
-			name:        "modify_file",
-			description: "modify the contents of a file",
-			proc:        ft.modifyFile,
+		&toolDefinition[modifyFileRequest, string]{
+			name:            "modify_file",
+			description:     "modify the contents of a file",
+			proc:            ft.modifyFile,
+			respName:        "new_content",
+			respDescription: "the content to be stored in the file in case it's different from the request",
 		},
-		&toolDefinition[deleteFileRequest, deleteFileResponse]{
+		&toolDefinition[deleteFileRequest, *deleteFileResponse]{
 			name:        "delete_file",
 			description: "delete a file",
 			proc:        ft.deleteFile,
 		},
-		&toolDefinition[createDirRequest, createDirResponse]{
+		&toolDefinition[createDirRequest, *createDirResponse]{
 			name:        "create_directory",
 			description: "create a new directory",
 			proc:        ft.createDir,

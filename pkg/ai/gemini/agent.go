@@ -17,6 +17,7 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(string(encoded))
 	decoded := &genai.Schema{}
 	if err := json.Unmarshal(encoded, decoded); err != nil {
 		return nil, err
@@ -37,10 +38,17 @@ func (g *Agent) SendMessageStream(ctx context.Context, parts []ai.Part) iter.Seq
 				p.Text = part.Text
 			}
 			if part.FunctionResponse != nil {
+				resp := make(map[string]any, len(part.FunctionResponse.Response))
+				for k, v := range part.FunctionResponse.Response {
+					resp[k] = v
+				}
+				if part.FunctionResponse.Error != nil {
+					resp["error"] = part.FunctionResponse.Error.Error()
+				}
 				p.FunctionResponse = &genai.FunctionResponse{
 					ID:       part.FunctionResponse.ID,
 					Name:     part.FunctionResponse.Name,
-					Response: part.FunctionResponse.Response,
+					Response: resp,
 				}
 			}
 			inputParts = append(inputParts, p)

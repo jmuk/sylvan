@@ -22,6 +22,7 @@ type FunctionResponse struct {
 	ID       string
 	Name     string
 	Response map[string]any
+	Error    error
 }
 
 type Part struct {

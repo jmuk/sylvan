@@ -83,7 +83,7 @@ func NewExecTool() *ExecTool {
 	return &ExecTool{}
 }
 
-func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) execCommandResponse {
+func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*execCommandResponse, error) {
 	logger := getLogger(ctx).With("commandline", req.CommandLine)
 	logger.Debug("Start execution")
 	params := whiteSpaces.Split(req.CommandLine, -1)
@@ -93,10 +93,7 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) exe
 	answer, err := confirm()
 	if err != nil {
 		logger.Error("Failed to obtain the user answer", "error", err)
-		return execCommandResponse{
-			ReturnCode: -1,
-			ErrorOut:   err.Error(),
-		}
+		return nil, err
 	}
 	var newCommandline string
 	if answer == confirmationEdit {
@@ -107,18 +104,12 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) exe
 		newCommandline, err = p.Run()
 		if err != nil {
 			logger.Error("Failed to obtain the user answer", "error", err)
-			return execCommandResponse{
-				ReturnCode: -1,
-				ErrorOut:   err.Error(),
-			}
+			return nil, err
 		}
 		params = whiteSpaces.Split(newCommandline, -1)
 	} else if answer != confirmationYes {
 		logger.Error("User declined to execute")
-		return execCommandResponse{
-			ReturnCode: -1,
-			ErrorOut:   "user declined to execute",
-		}
+		return nil, &ToolError{errors.New("user declied to execute")}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
@@ -134,36 +125,29 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) exe
 	err = cmd.Run()
 	if err != nil && !errors.Is(err, &exec.ExitError{}) {
 		logger.Error("Failed to execute", "error", err)
-		return execCommandResponse{
-			ReturnCode: -1,
-			ErrorOut:   err.Error(),
-		}
+		return nil, &ToolError{err}
 	}
 	state := cmd.ProcessState
 	if state == nil {
 		logger.Error("Missing process state")
-		resp := execCommandResponse{
-			ReturnCode: -1,
-			ErrorOut:   "Unknown error",
-		}
 		if err != nil {
-			resp.ErrorOut = err.Error()
+			return nil, err
 		}
-		return resp
+		return nil, errors.New("unknown error")
 	}
 
 	logger.Debug("Execution completed", "return_code", state.ExitCode())
 
-	return execCommandResponse{
+	return &execCommandResponse{
 		ReturnCode: state.ExitCode(),
 		Output:     stdout.String(),
 		ErrorOut:   stderr.String(),
-	}
+	}, nil
 }
 
 func (et *ExecTool) ToolDefs() []ToolDefinition {
 	return []ToolDefinition{
-		&toolDefinition[execCommandRequest, execCommandResponse]{
+		&toolDefinition[execCommandRequest, *execCommandResponse]{
 			name:        "exec_command",
 			description: "execute a command",
 			proc:        et.execCommand,
