@@ -44,7 +44,7 @@ func (s *Scanner) Scan() (*Event, error) {
 			continue
 		}
 		tag := l[:colonPos]
-		data := l[(colonPos + 1):]
+		data := strings.TrimSpace(l[(colonPos + 1):])
 		switch tag {
 		case "event":
 			ev.Event = data

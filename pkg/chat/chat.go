@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -61,7 +62,7 @@ func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 			}
 			c.logger.Debug("Received message", "result", part)
 			if part.Text != "" {
-				fmt.Print(part.Text)
+				fmt.Fprint(os.Stdout, part.Text)
 				printed = true
 			}
 			if call := part.FunctionCall; call != nil {

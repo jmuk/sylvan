@@ -47,8 +47,8 @@ type requestMetadata struct {
 }
 
 type thinkingConfig struct {
-	BudgetToken int    `json:"budget_token"`
-	Type        string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens"`
+	Type         string `json:"type"`
 }
 
 type toolChoice struct {
@@ -189,19 +189,19 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 				}
 			}
 
-			reqMessages = append(reqMessages, inputMessage{})
+			reqMessages = append(reqMessages, imsg)
 		}
 		body := bodyData{
 			Model:     a.config.Model,
-			Messages:  []inputMessage{},
+			Messages:  reqMessages,
 			MaxTokens: a.config.MaxTokens,
 			Stream:    true,
 			System:    a.systemPrompt,
 			Thinking: &thinkingConfig{
-				BudgetToken: 8192,
-				Type:        "enabled",
+				BudgetTokens: 8192,
+				Type:         "enabled",
 			},
-			Tools: a.tools,
+			// Tools: a.tools,
 		}
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -237,56 +237,56 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 			switch eventType(ev.Event) {
 			case eventTypeError:
 				if !yield(nil, errors.New(ev.Data)) {
-					break
+					return
 				}
 			case eventTypeContentBlockStart:
 				currentBlock = &contentBlock{}
 				if err := json.Unmarshal([]byte(ev.Data), currentBlock); err != nil {
 					if !yield(nil, err) {
-						break
+						return
 					}
 				}
 				if currentBlock.ContentBlock.Type == blockTypeText && currentBlock.ContentBlock.Text != "" {
 					if !yield(&ai.Part{Text: currentBlock.ContentBlock.Text}, nil) {
-						break
+						return
 					}
 				} else if currentBlock.ContentBlock.Type == blockTypeThinking && currentBlock.ContentBlock.Thinking != "" {
 					if !yield(&ai.Part{Thought: true, Text: currentBlock.ContentBlock.Thinking}, nil) {
-						break
+						return
 					}
 				}
 			case eventTypeContentBlockDelta:
 				cbd := &contentBlockDelta{}
 				if err := json.Unmarshal([]byte(ev.Data), cbd); err != nil {
 					if !yield(nil, err) {
-						break
+						return
 					}
 				}
 				if currentBlock == nil {
 					if !yield(nil, fmt.Errorf("missing content block start")) {
-						break
+						return
 					}
 				}
 				if currentBlock.Index != cbd.Index {
 					if !yield(nil, fmt.Errorf("index mismatch: want %d got %d", currentBlock.Index, cbd.Index)) {
-						break
+						return
 					}
 				}
 				switch cbd.Delta.Type {
 				case deltaTypeText:
 					if currentBlock.ContentBlock.Type != blockTypeText {
 						if !yield(nil, fmt.Errorf("type mismatch: want %s got text", currentBlock.Type)) {
-							break
+							return
 						}
 					}
 					currentBlock.ContentBlock.Text += cbd.Delta.Text
 					if !yield(&ai.Part{Text: cbd.Delta.Text}, nil) {
-						break
+						return
 					}
 				case deltaTypeJSON:
 					if currentBlock.ContentBlock.Type != blockTypeToolUse {
 						if !yield(nil, fmt.Errorf("type mismatch: want %s got partial_json", currentBlock.ContentBlock.Type)) {
-							break
+							return
 						}
 					}
 					// Use Text field to accumulate partial JSON then parse it.
@@ -295,18 +295,18 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 				case deltaTypeThinking:
 					if currentBlock.ContentBlock.Type != blockTypeThinking {
 						if !yield(nil, fmt.Errorf("type mismatch: want %s got thinking", currentBlock.ContentBlock.Type)) {
-							break
+							return
 						}
 					}
 					if !yield(&ai.Part{Text: cbd.Delta.Thinking, Thought: true}, nil) {
-						break
+						return
 					}
 
 				}
 			case eventTypeContentBlockStop:
 				if currentBlock == nil {
 					if !yield(nil, fmt.Errorf("content_block_stop appears without start")) {
-						break
+						return
 					}
 				}
 				switch currentBlock.ContentBlock.Type {
@@ -329,7 +329,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 					currentBlock.ContentBlock.Input = map[string]any{}
 					if err := json.Unmarshal([]byte(currentBlock.ContentBlock.Text), &currentBlock.ContentBlock.Input); err != nil {
 						if !yield(nil, err) {
-							break
+							return
 						}
 					}
 					part := &ai.Part{FunctionCall: &ai.FunctionCall{
@@ -338,7 +338,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 						Args: currentBlock.ContentBlock.Input,
 					}}
 					if !yield(part, err) {
-						break
+						return
 					}
 					a.history = append(a.history, historicalContent{
 						Part: *part,

@@ -106,10 +106,11 @@ func (c *Config) UnmarshalTOML(input any) error {
 			}
 			c.ModelConfigs = append(c.ModelConfigs, geminiConfig)
 		case ModelTypeClaude:
-			claudeConfig := &claude.Config{}
-			if err := toml.Unmarshal(marshaled, claudeConfig); err != nil {
+			claudeConfig, err := claude.ParseConfig(marshaled)
+			if err != nil {
 				return fmt.Errorf(`failed to aprse %d-th config: %w`, i, err)
 			}
+			c.ModelConfigs = append(c.ModelConfigs, claudeConfig)
 		}
 	}
 	return nil

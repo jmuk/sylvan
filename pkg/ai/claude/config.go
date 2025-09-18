@@ -3,11 +3,13 @@ package claude
 import (
 	"context"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
 type Config struct {
+	ConfigName       string `toml:"name"`
 	BaseURL          string `toml:"base_url"`
 	APIKey           string `toml:"api_key"`
 	APIKeyFromEnv    string `toml:"api_key_env"`
@@ -17,11 +19,19 @@ type Config struct {
 }
 
 func (c *Config) Name() string {
-	return "claude"
+	return c.ConfigName
 }
 
 func (c *Config) NewChat(ctx context.Context, toolDefs []tools.ToolDefinition) (ai.Agent, error) {
 	return New(c, toolDefs)
+}
+
+func ParseConfig(data []byte) (*Config, error) {
+	config := *DefaultConfig()
+	if err := toml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }
 
 func DefaultConfig() *Config {
@@ -31,6 +41,6 @@ func DefaultConfig() *Config {
 		AnthropicVersion: "2023-06-01",
 		// TODO -- possibly use models API?
 		Model:     "claude-sonnet-4-20250514",
-		MaxTokens: 65536,
+		MaxTokens: 32768,
 	}
 }
