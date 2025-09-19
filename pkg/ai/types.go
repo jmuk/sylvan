@@ -26,10 +26,11 @@ type FunctionResponse struct {
 }
 
 type Part struct {
-	Thought          bool
-	Text             string
-	FunctionCall     *FunctionCall
-	FunctionResponse *FunctionResponse
+	Thought           bool
+	Text              string
+	ThinkingSignature string
+	FunctionCall      *FunctionCall
+	FunctionResponse  *FunctionResponse
 }
 
 type Agent interface {

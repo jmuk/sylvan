@@ -77,7 +77,7 @@ type bodyData struct {
 	Temperature   float32                         `json:"temperature,omitempty"`
 	Thinking      *thinkingConfig                 `json:"thinking,omitempty"`
 	ToolChoice    *toolChoice                     `json:"tool_choice,omitempty"`
-	Tools         []tool                          `json:"tool,omitempty"`
+	Tools         []tool                          `json:"tools,omitempty"`
 	TopK          int                             `json:"top_k,omitempty"`
 	TopP          int                             `json:"top_p,omitempty"`
 }
@@ -110,10 +110,11 @@ const (
 type deltaType string
 
 const (
-	deltaTypeNone     deltaType = ""
-	deltaTypeText     deltaType = "text_delta"
-	deltaTypeJSON     deltaType = "json_delta"
-	deltaTypeThinking deltaType = "thinking_delta"
+	deltaTypeNone      deltaType = ""
+	deltaTypeText      deltaType = "text_delta"
+	deltaTypeJSON      deltaType = "input_json_delta"
+	deltaTypeThinking  deltaType = "thinking_delta"
+	deltaTypeSignature deltaType = "signature_delta"
 )
 
 type contentBlockDelta struct {
@@ -121,9 +122,10 @@ type contentBlockDelta struct {
 	Index int       `json:"index"`
 	Delta struct {
 		Type        deltaType `json:"type"`
-		Text        string    `json:"string"`
+		Text        string    `json:"text"`
 		PartialJSON string    `json:"partial_json"`
 		Thinking    string    `json:"thinking"`
+		Signature   string    `json:"signature"`
 	} `json:"delta"`
 }
 
@@ -147,7 +149,8 @@ type contentBlock struct {
 		Name  string         `json:"name"`
 		Input map[string]any `json:"input"`
 
-		Thinking string `json:"thinking"`
+		Thinking  string `json:"thinking"`
+		Signature string `json:"signature"`
 	} `json:"content_block"`
 }
 
@@ -168,24 +171,52 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 			imsg := inputMessage{Role: hc.role}
 			if hc.Part.Text != "" {
 				if hc.Part.Thought {
-					imsg.Content = map[string]any{
-						"thinking": hc.Part.Text,
-						"type":     "thinking",
+					imsg.Content = []map[string]any{
+						{
+							"thinking":  hc.Part.Text,
+							"type":      "thinking",
+							"signature": hc.Part.ThinkingSignature,
+						},
 					}
 				} else {
 					imsg.Content = hc.Part.Text
 				}
 			} else if fc := hc.Part.FunctionCall; fc != nil {
-				imsg.Content = map[string]any{
-					"id":    fc.ID,
-					"name":  fc.Name,
-					"input": fc.Args,
-					"type":  "tool_use",
+				imsg.Content = []map[string]any{
+					{
+						"id":    fc.ID,
+						"name":  fc.Name,
+						"input": fc.Args,
+						"type":  "tool_use",
+					},
 				}
 			} else if fr := hc.Part.FunctionResponse; fr != nil {
-				imsg.Content = map[string]any{
-					"tool_use_id": fr.ID,
-					"type":        "tool_result",
+				var body string
+				if fr.Error != nil {
+					body = fr.Error.Error()
+				} else if len(fr.Response) == 1 {
+					for _, v := range fr.Response {
+						s, ok := v.(string)
+						if ok {
+							body = s
+						}
+					}
+				}
+				if body == "" {
+					encoded, err := json.Marshal(fr.Response)
+					if err != nil {
+						yield(nil, err)
+						return
+					}
+					body = string(encoded)
+				}
+				imsg.Content = []map[string]any{
+					{
+						"tool_use_id": fr.ID,
+						"type":        "tool_result",
+						"content":     body,
+						"is_error":    hc.Part.FunctionResponse.Error != nil,
+					},
 				}
 			}
 
@@ -201,7 +232,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 				BudgetTokens: 8192,
 				Type:         "enabled",
 			},
-			// Tools: a.tools,
+			Tools: a.tools[:1],
 		}
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -222,6 +253,11 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 			return
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode/100 != 2 {
+			data, _ := io.ReadAll(resp.Body)
+			yield(nil, errors.New(string(data)))
+			return
+		}
 		sseScanner := sse.NewScanner(resp.Body)
 		var currentBlock *contentBlock = nil
 		for {
@@ -298,10 +334,12 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 							return
 						}
 					}
+					currentBlock.ContentBlock.Thinking += cbd.Delta.Thinking
 					if !yield(&ai.Part{Text: cbd.Delta.Thinking, Thought: true}, nil) {
 						return
 					}
-
+				case deltaTypeSignature:
+					currentBlock.ContentBlock.Signature += cbd.Delta.Signature
 				}
 			case eventTypeContentBlockStop:
 				if currentBlock == nil {
@@ -320,8 +358,9 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 				case blockTypeThinking:
 					a.history = append(a.history, historicalContent{
 						Part: ai.Part{
-							Thought: true,
-							Text:    currentBlock.ContentBlock.Thinking,
+							Thought:           true,
+							Text:              currentBlock.ContentBlock.Thinking,
+							ThinkingSignature: currentBlock.ContentBlock.Signature,
 						},
 						role: ai.RoleAssistant,
 					})
