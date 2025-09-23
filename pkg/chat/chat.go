@@ -9,19 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmuk/sylvan/pkg/ai"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/manifoldco/promptui"
 )
 
 type Chat struct {
-	chat   ai.Agent
+	chat   Agent
 	p      *promptui.Prompt
 	logger *slog.Logger
 	trun   *tools.ToolRunner
 }
 
-func New(chat ai.Agent, handler slog.Handler, trun *tools.ToolRunner) *Chat {
+func New(chat Agent, handler slog.Handler, trun *tools.ToolRunner) *Chat {
 	p := &promptui.Prompt{
 		Label: ">",
 	}
@@ -52,10 +51,10 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 }
 
 func (c *Chat) HandleMessage(ctx context.Context, input string) error {
-	msgs := []ai.Part{{Text: input}}
+	msgs := []Part{{Text: input}}
 	for {
 		printed := false
-		var nextMsgs []ai.Part
+		var nextMsgs []Part
 		for part, err := range c.chat.SendMessageStream(ctx, msgs) {
 			if err != nil {
 				return err
@@ -76,8 +75,8 @@ func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 					}
 					err = toolErr.Unwrap()
 				}
-				nextMsgs = append(nextMsgs, ai.Part{
-					FunctionResponse: &ai.FunctionResponse{
+				nextMsgs = append(nextMsgs, Part{
+					FunctionResponse: &FunctionResponse{
 						ID:       part.FunctionCall.ID,
 						Name:     part.FunctionCall.Name,
 						Response: resp,

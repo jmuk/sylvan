@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -22,7 +22,7 @@ func (c *Config) Name() string {
 	return c.ConfigName
 }
 
-func (c *Config) NewChat(ctx context.Context, toolDefs []tools.ToolDefinition) (ai.Agent, error) {
+func (c *Config) NewChat(ctx context.Context, toolDefs []tools.ToolDefinition) (chat.Agent, error) {
 	return New(c, toolDefs)
 }
 

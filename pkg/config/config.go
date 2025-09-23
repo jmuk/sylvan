@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jmuk/sylvan/pkg/ai"
-	"github.com/jmuk/sylvan/pkg/ai/claude"
-	"github.com/jmuk/sylvan/pkg/ai/gemini"
+	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/claude"
+	"github.com/jmuk/sylvan/pkg/chat/gemini"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -27,7 +27,7 @@ type ModelConfig interface {
 	// TODO: add common interface for chat
 	NewChat(ctx context.Context,
 		tools []tools.ToolDefinition,
-	) (ai.Agent, error)
+	) (chat.Agent, error)
 }
 
 type Config struct {
@@ -118,7 +118,7 @@ func (c *Config) UnmarshalTOML(input any) error {
 
 func (c *Config) NewChat(ctx context.Context,
 	toolDefs []tools.ToolDefinition,
-) (ai.Agent, error) {
+) (chat.Agent, error) {
 	for _, modelConfig := range c.ModelConfigs {
 		if modelConfig.Name() == c.ModelName {
 			return modelConfig.NewChat(ctx, toolDefs)

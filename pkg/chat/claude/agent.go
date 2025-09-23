@@ -9,7 +9,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -25,12 +25,12 @@ type Agent struct {
 	tools []tool
 }
 
-func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.Seq2[*ai.Part, error] {
-	return func(yield func(*ai.Part, error) bool) {
+func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) iter.Seq2[*chat.Part, error] {
+	return func(yield func(*chat.Part, error) bool) {
 		for _, msg := range messages {
 			a.history = append(a.history, message{
 				Part: msg,
-				Role: ai.RoleUser,
+				Role: chat.RoleUser,
 			})
 		}
 		respBody, err := a.request()
@@ -50,7 +50,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []ai.Part) iter.
 
 func New(config *Config, toolDefs []tools.ToolDefinition) (*Agent, error) {
 	agent := &Agent{
-		systemPrompt: ai.SystemPrompt,
+		systemPrompt: chat.SystemPrompt,
 		config:       config,
 	}
 	for _, toolDef := range toolDefs {

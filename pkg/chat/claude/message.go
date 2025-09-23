@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/chat"
 )
 
 type contentType string
@@ -38,15 +38,15 @@ type toolResultContent struct {
 }
 
 type inputMessage struct {
-	Content any     `json:"content"`
-	Role    ai.Role `json:"role"`
+	Content any       `json:"content"`
+	Role    chat.Role `json:"role"`
 }
 
 // message keeps the part with the role, used to keep the
 // conversation history.
 type message struct {
-	Part ai.Part `json:"part"`
-	Role ai.Role `json:"role"`
+	Part chat.Part `json:"part"`
+	Role chat.Role `json:"role"`
 }
 
 func (m message) toInput() (inputMessage, error) {

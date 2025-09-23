@@ -1,4 +1,4 @@
-package ai
+package chat
 
 // SystemPrompt describes the basic system prompt for the coding agent.
 const SystemPrompt = `

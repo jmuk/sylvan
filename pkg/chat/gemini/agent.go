@@ -7,7 +7,7 @@ import (
 	"iter"
 
 	"github.com/invopop/jsonschema"
-	"github.com/jmuk/sylvan/pkg/ai"
+	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"google.golang.org/genai"
 )
@@ -29,8 +29,8 @@ type Agent struct {
 	chat *genai.Chat
 }
 
-func (g *Agent) SendMessageStream(ctx context.Context, parts []ai.Part) iter.Seq2[*ai.Part, error] {
-	return func(yield func(*ai.Part, error) bool) {
+func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.Seq2[*chat.Part, error] {
+	return func(yield func(*chat.Part, error) bool) {
 		inputParts := make([]*genai.Part, 0, len(parts))
 		for _, part := range parts {
 			p := &genai.Part{}
@@ -63,9 +63,9 @@ func (g *Agent) SendMessageStream(ctx context.Context, parts []ai.Part) iter.Seq
 				continue
 			}
 			for _, part := range result.Candidates[0].Content.Parts {
-				p := &ai.Part{}
+				p := &chat.Part{}
 				if part.FunctionCall != nil {
-					p.FunctionCall = &ai.FunctionCall{
+					p.FunctionCall = &chat.FunctionCall{
 						ID:   part.FunctionCall.ID,
 						Name: part.FunctionCall.Name,
 						Args: part.FunctionCall.Args,
@@ -116,7 +116,7 @@ func New(
 
 	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
-			ai.SystemPrompt,
+			chat.SystemPrompt,
 			genai.RoleUser,
 		),
 		Tools: []*genai.Tool{{FunctionDeclarations: funcs}},
