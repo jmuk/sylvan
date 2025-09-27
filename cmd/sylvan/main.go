@@ -2,65 +2,23 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
-	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
-var logtostderr bool
-
-func newLogHandler(tempdir, path string) (slog.Handler, func(), error) {
-	opts := &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug,
-	}
-	if logtostderr {
-		return slog.NewJSONHandler(os.Stderr, opts), func() {}, nil
-	}
-
-	file, err := os.OpenFile(filepath.Join(tempdir, path), os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, nil, err
-	}
-	return slog.NewJSONHandler(file, opts), func() { file.Close() }, nil
-}
-
 func main() {
-	flag.BoolVar(&logtostderr, "logtostderr", false, "Print out log messages to stderr")
-	flag.Parse()
-
 	ctx := context.Background()
 
-	var tempdir string
-	if logtostderr {
-		tempdir = ""
-	} else {
-		var err error
-		if tempdir, err = os.MkdirTemp("", "sylvan"); err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("Logs are stored into %s", tempdir)
-	}
-
-	toolsHandler, toolsCleanup, err := newLogHandler(tempdir, "tools.log")
+	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer toolsCleanup()
 
-	aiHandler, aiCleanup, err := newLogHandler(tempdir, "ai.log")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer aiCleanup()
-
-	ft, err := tools.NewFiles(".")
+	ft, err := tools.NewFiles(cwd)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,7 +27,7 @@ func main() {
 	toolDefs := append([]tools.ToolDefinition{}, ft.ToolDefs()...)
 	toolDefs = append(toolDefs, et.ToolDefs()...)
 
-	trun, err := tools.NewToolRunner(toolsHandler, toolDefs)
+	trun, err := tools.NewToolRunner(toolDefs)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,8 +42,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	c := chat.New(aiChat, aiHandler, trun)
-	if err := c.RunLoop(ctx); err != nil {
+	c, err := chat.New(aiChat, trun, cwd)
+	if err != nil {
 		log.Fatal(err)
+	}
+	defer c.Close()
+	if err := c.RunLoop(ctx); err != nil {
+		log.Print(err)
 	}
 }

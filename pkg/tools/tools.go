@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/manifoldco/promptui"
 )
 
@@ -22,10 +23,9 @@ func getLogger(ctx context.Context) *slog.Logger {
 
 type ToolRunner struct {
 	defsMap map[string]ToolDefinition
-	logger  *slog.Logger
 }
 
-func NewToolRunner(h slog.Handler, defs []ToolDefinition) (*ToolRunner, error) {
+func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 	m := make(map[string]ToolDefinition, len(defs))
 	for _, d := range defs {
 		if _, ok := m[d.Name()]; ok {
@@ -33,7 +33,7 @@ func NewToolRunner(h slog.Handler, defs []ToolDefinition) (*ToolRunner, error) {
 		}
 		m[d.Name()] = d
 	}
-	return &ToolRunner{defsMap: m, logger: slog.New(h)}, nil
+	return &ToolRunner{defsMap: m}, nil
 }
 
 func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (map[string]any, error) {
@@ -41,8 +41,16 @@ func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (m
 	if !ok {
 		return nil, fmt.Errorf("unknown tool %s", name)
 	}
+	s, ok := session.FromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("session not found")
+	}
+	l, err := s.GetLogger("tool")
+	if err != nil {
+		return nil, err
+	}
 
-	ctx = context.WithValue(ctx, loggerKey, r.logger.With("tool_name", name, "request", in))
+	ctx = context.WithValue(ctx, loggerKey, l.With("tool_name", name, "request", in))
 	return p.process(ctx, in)
 }
 

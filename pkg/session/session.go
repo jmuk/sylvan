@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -27,23 +28,23 @@ type sessionMeta struct {
 	WorkingDir string    `toml:"path"`
 }
 
-type logHandler struct {
+type logger struct {
 	f *os.File
-	h slog.Handler
+	l *slog.Logger
 }
 
-func newLogHandler(p string, opts *slog.HandlerOptions) (*logHandler, error) {
+func newLogger(p string, opts *slog.HandlerOptions) (*logger, error) {
 	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, err
 	}
-	return &logHandler{
+	return &logger{
 		f: f,
-		h: slog.NewJSONHandler(f, opts),
+		l: slog.New(slog.NewJSONHandler(f, opts)),
 	}, nil
 }
 
-func (h *logHandler) Close() error {
+func (h *logger) Close() error {
 	return h.f.Close()
 }
 
@@ -51,7 +52,22 @@ type Session struct {
 	meta        sessionMeta
 	sessionPath string
 
-	handlers map[string]*logHandler
+	loggers map[string]*logger
+
+	initialized bool
+}
+
+type sessionKeyT struct{}
+
+var sessionKey = sessionKeyT{}
+
+func (s *Session) With(ctx context.Context) context.Context {
+	return context.WithValue(ctx, sessionKey, s)
+}
+
+func FromContext(ctx context.Context) (*Session, bool) {
+	s, ok := ctx.Value(sessionKey).(*Session)
+	return s, ok
 }
 
 func (s *Session) updateSessionsFile(workingDir string) error {
@@ -77,13 +93,17 @@ func (s *Session) updateSessionsFile(workingDir string) error {
 	return os.WriteFile(sessionsFile, []byte(strings.Join(lines, "\n")), 0644)
 }
 
-func (s *Session) init() error {
+func (s *Session) Init() error {
+	if s.initialized {
+		return nil
+	}
 	if s.meta.SessionID == "" {
+		s.initialized = true
 		// likely generated on tempdir; skipping.
 		return nil
 	}
 
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := getCacheBase()
 	if err != nil {
 		return err
 	}
@@ -106,17 +126,21 @@ func (s *Session) init() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(metaFile, encodedMeta, 0644)
+	if err := os.WriteFile(metaFile, encodedMeta, 0644); err != nil {
+		return err
+	}
+	s.initialized = true
+	return nil
 }
 
 func (s *Session) logPath() string {
 	return filepath.Join(s.sessionPath, "logs")
 }
 
-func (s *Session) NewLogHandler(name string) (slog.Handler, error) {
-	h, ok := s.handlers[name]
+func (s *Session) GetLogger(name string) (*slog.Logger, error) {
+	l, ok := s.loggers[name]
 	if ok {
-		return h.h, nil
+		return l.l, nil
 	}
 	if strings.Contains(name, "/") {
 		return nil, fmt.Errorf("malformed log name %s", name)
@@ -128,23 +152,31 @@ func (s *Session) NewLogHandler(name string) (slog.Handler, error) {
 	if err := os.MkdirAll(s.logPath(), 0755); err != nil {
 		return nil, err
 	}
-	h, err := newLogHandler(filepath.Join(s.logPath(), pathName), nil)
+	l, err := newLogger(filepath.Join(s.logPath(), pathName), nil)
 	if err != nil {
 		return nil, err
 	}
-	s.handlers[name] = h
-	return h.h, nil
+	s.loggers[name] = l
+	return l.l, nil
 }
 
 func (s *Session) Close() error {
 	var allerr error
-	for name, h := range s.handlers {
-		err := h.Close()
+	for name, l := range s.loggers {
+		err := l.Close()
 		if err != nil {
 			allerr = errors.Join(allerr, fmt.Errorf("failed to close %s: %w", name, err))
 		}
 	}
 	return allerr
+}
+
+func getCacheBase() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cacheDir, "sylvan"), nil
 }
 
 func getWorkingDir(cacheDir, p string) string {
@@ -154,7 +186,7 @@ func getWorkingDir(cacheDir, p string) string {
 }
 
 func ListSessions(cwd string) ([]*Session, error) {
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := getCacheBase()
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +222,7 @@ func ListSessions(cwd string) ([]*Session, error) {
 }
 
 func NewFromID(sessionID string) (*Session, error) {
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := getCacheBase()
 	if err != nil {
 		return nil, err
 	}
@@ -220,12 +252,13 @@ func newFromID(sessionID, cacheDir string) (*Session, error) {
 	return &Session{
 		meta:        m,
 		sessionPath: sessionDir,
+		loggers:     map[string]*logger{},
 	}, nil
 }
 
 func New(cwd string) (*Session, error) {
 	now := time.Now()
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := getCacheBase()
 	if err != nil {
 		log.Printf("Failed to obtain the user cache dir: %v", err)
 		log.Printf("Falls back to the temporary directory...")
@@ -239,6 +272,7 @@ func New(cwd string) (*Session, error) {
 				Timestamp: now,
 			},
 			sessionPath: tempDir,
+			loggers:     map[string]*logger{},
 		}, nil
 	}
 
@@ -254,5 +288,6 @@ func New(cwd string) (*Session, error) {
 			WorkingDir: cwd,
 		},
 		sessionPath: sessionPath,
+		loggers:     map[string]*logger{},
 	}, nil
 }

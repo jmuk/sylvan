@@ -4,32 +4,42 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/manifoldco/promptui"
 )
 
 type Chat struct {
-	chat   Agent
-	p      *promptui.Prompt
-	logger *slog.Logger
-	trun   *tools.ToolRunner
+	chat Agent
+	p    *promptui.Prompt
+	trun *tools.ToolRunner
+	s    *session.Session
+	cwd  string
 }
 
-func New(chat Agent, handler slog.Handler, trun *tools.ToolRunner) *Chat {
+func New(chat Agent, trun *tools.ToolRunner, cwd string) (*Chat, error) {
+	s, err := session.New(cwd)
+	if err != nil {
+		return nil, err
+	}
 	p := &promptui.Prompt{
 		Label: ">",
 	}
 	return &Chat{
-		chat:   chat,
-		p:      p,
-		logger: slog.New(handler),
-		trun:   trun,
-	}
+		chat: chat,
+		p:    p,
+		trun: trun,
+		s:    s,
+		cwd:  cwd,
+	}, nil
+}
+
+func (c *Chat) Close() error {
+	return c.s.Close()
 }
 
 func (c *Chat) RunLoop(ctx context.Context) error {
@@ -51,15 +61,24 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 }
 
 func (c *Chat) HandleMessage(ctx context.Context, input string) error {
+	if err := c.s.Init(); err != nil {
+		return err
+	}
+	l, err := c.s.GetLogger("chat")
+	if err != nil {
+		return err
+	}
+	ctx = c.s.With(ctx)
 	msgs := []Part{{Text: input}}
 	for {
 		printed := false
 		var nextMsgs []Part
+		l.Debug("Sending", "messages", msgs)
 		for part, err := range c.chat.SendMessageStream(ctx, msgs) {
 			if err != nil {
 				return err
 			}
-			c.logger.Debug("Received message", "result", part)
+			l.Debug("Received message", "result", part)
 			if part.Text != "" {
 				fmt.Fprint(os.Stdout, part.Text)
 				printed = true
