@@ -27,22 +27,12 @@ func main() {
 	toolDefs := append([]tools.ToolDefinition{}, ft.ToolDefs()...)
 	toolDefs = append(toolDefs, et.ToolDefs()...)
 
-	trun, err := tools.NewToolRunner(toolDefs)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	config, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	aiChat, err := config.NewChat(ctx, toolDefs)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	c, err := chat.New(aiChat, trun, cwd)
+	c, err := chat.New(config, toolDefs, cwd)
 	if err != nil {
 		log.Fatal(err)
 	}

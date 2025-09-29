@@ -22,7 +22,7 @@ func (c *Config) Name() string {
 	return c.ConfigName
 }
 
-func (c *Config) NewChat(ctx context.Context, toolDefs []tools.ToolDefinition) (chat.Agent, error) {
+func (c *Config) NewAgent(ctx context.Context, historyFile string, toolDefs []tools.ToolDefinition) (chat.Agent, error) {
 	return New(c, toolDefs)
 }
 

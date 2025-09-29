@@ -22,8 +22,9 @@ func (gc *Config) Name() string {
 	return gc.ConfigName
 }
 
-func (gc *Config) NewChat(
+func (gc *Config) NewAgent(
 	ctx context.Context,
+	historyFile string,
 	toolDefs []tools.ToolDefinition,
 ) (chat.Agent, error) {
 	backend := genai.BackendUnspecified

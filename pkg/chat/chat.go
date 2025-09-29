@@ -14,15 +14,21 @@ import (
 )
 
 type Chat struct {
-	chat Agent
+	factory  AgentFactory
+	toolDefs []tools.ToolDefinition
+
 	p    *promptui.Prompt
 	trun *tools.ToolRunner
 	s    *session.Session
 	cwd  string
 }
 
-func New(chat Agent, trun *tools.ToolRunner, cwd string) (*Chat, error) {
+func New(factory AgentFactory, toolDefs []tools.ToolDefinition, cwd string) (*Chat, error) {
 	s, err := session.New(cwd)
+	if err != nil {
+		return nil, err
+	}
+	trun, err := tools.NewToolRunner(toolDefs)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +36,9 @@ func New(chat Agent, trun *tools.ToolRunner, cwd string) (*Chat, error) {
 		Label: ">",
 	}
 	return &Chat{
-		chat: chat,
+		factory:  factory,
+		toolDefs: toolDefs,
+
 		p:    p,
 		trun: trun,
 		s:    s,
@@ -43,6 +51,7 @@ func (c *Chat) Close() error {
 }
 
 func (c *Chat) RunLoop(ctx context.Context) error {
+	var agent Agent = nil
 	for {
 		line, err := c.p.Run()
 		if err != nil {
@@ -54,16 +63,22 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 		if strings.HasPrefix(line, "/q") {
 			return nil
 		}
-		if err := c.HandleMessage(ctx, line); err != nil {
+		if err := c.s.Init(); err != nil {
+			return err
+		}
+		if agent == nil {
+			agent, err = c.factory.NewAgent(ctx, c.s.HistoryFile(), c.toolDefs)
+			if err != nil {
+				return err
+			}
+		}
+		if err := c.HandleMessage(ctx, agent, line); err != nil {
 			return err
 		}
 	}
 }
 
-func (c *Chat) HandleMessage(ctx context.Context, input string) error {
-	if err := c.s.Init(); err != nil {
-		return err
-	}
+func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) error {
 	l, err := c.s.GetLogger("chat")
 	if err != nil {
 		return err
@@ -74,7 +89,7 @@ func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 		printed := false
 		var nextMsgs []Part
 		l.Debug("Sending", "messages", msgs)
-		for part, err := range c.chat.SendMessageStream(ctx, msgs) {
+		for part, err := range agent.SendMessageStream(ctx, msgs) {
 			if err != nil {
 				return err
 			}

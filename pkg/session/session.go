@@ -133,6 +133,10 @@ func (s *Session) Init() error {
 	return nil
 }
 
+func (s *Session) HistoryFile() string {
+	return filepath.Join(s.sessionPath, "history.json")
+}
+
 func (s *Session) logPath() string {
 	return filepath.Join(s.sessionPath, "logs")
 }
