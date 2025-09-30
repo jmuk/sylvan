@@ -233,7 +233,7 @@ func (ep *eventProcessor) processEvents() iter.Seq2[*chat.Part, error] {
 					}
 				}
 				ep.agent.history = append(ep.agent.history, message{
-					Part: *part,
+					Part: part,
 					Role: chat.RoleAssistant,
 				})
 			}

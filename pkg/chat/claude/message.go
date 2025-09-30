@@ -45,8 +45,8 @@ type inputMessage struct {
 // message keeps the part with the role, used to keep the
 // conversation history.
 type message struct {
-	Part chat.Part `json:"part"`
-	Role chat.Role `json:"role"`
+	Part *chat.Part `json:"part"`
+	Role chat.Role  `json:"role"`
 }
 
 func (m message) toInput() (inputMessage, error) {

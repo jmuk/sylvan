@@ -23,7 +23,7 @@ func (c *Config) Name() string {
 }
 
 func (c *Config) NewAgent(ctx context.Context, toolDefs []tools.ToolDefinition) (chat.Agent, error) {
-	return New(c, toolDefs)
+	return New(ctx, c, toolDefs)
 }
 
 func ParseConfig(data []byte) (*Config, error) {
