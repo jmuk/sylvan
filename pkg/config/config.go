@@ -27,7 +27,6 @@ type ModelConfig interface {
 	// TODO: add common interface for chat
 	NewAgent(
 		ctx context.Context,
-		historyFile string,
 		tools []tools.ToolDefinition,
 	) (chat.Agent, error)
 }
@@ -120,12 +119,11 @@ func (c *Config) UnmarshalTOML(input any) error {
 
 func (c *Config) NewAgent(
 	ctx context.Context,
-	historyFile string,
 	toolDefs []tools.ToolDefinition,
 ) (chat.Agent, error) {
 	for _, modelConfig := range c.ModelConfigs {
 		if modelConfig.Name() == c.ModelName {
-			return modelConfig.NewAgent(ctx, historyFile, toolDefs)
+			return modelConfig.NewAgent(ctx, toolDefs)
 		}
 	}
 	return nil, errors.New("model config not found")

@@ -1,13 +1,17 @@
 package gemini
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"iter"
+	"os"
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"google.golang.org/genai"
 )
@@ -26,7 +30,31 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 }
 
 type Agent struct {
-	chat *genai.Chat
+	chat        *genai.Chat
+	historyFile string
+}
+
+func (g *Agent) saveContent(c *genai.Content) error {
+	if g.historyFile == "" {
+		return nil
+	}
+	data, err := os.ReadFile(g.historyFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	hasContent := len(data) > 0
+	w := bytes.NewBuffer(data)
+	if hasContent {
+		if _, err := w.WriteRune('\n'); err != nil {
+			return err
+		}
+	}
+	if err := json.NewEncoder(w).Encode(c); err != nil {
+		return err
+	}
+	return os.WriteFile(g.historyFile, w.Bytes(), 0600)
 }
 
 func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.Seq2[*chat.Part, error] {
@@ -52,6 +80,14 @@ func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.S
 				}
 			}
 			inputParts = append(inputParts, p)
+		}
+		if err := g.saveContent(&genai.Content{
+			Parts: inputParts,
+			Role:  genai.RoleUser,
+		}); err != nil {
+			if !yield(nil, err) {
+				return
+			}
 		}
 		for result, err := range g.chat.SendStream(ctx, inputParts...) {
 			if err != nil {
@@ -79,8 +115,35 @@ func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.S
 					return
 				}
 			}
+			if err := g.saveContent(result.Candidates[0].Content); err != nil {
+				if !yield(nil, err) {
+					return
+				}
+			}
 		}
 	}
+}
+
+func loadHistory(historyFile string) ([]*genai.Content, error) {
+	f, err := os.Open(historyFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	var contents []*genai.Content
+	for s.Scan() {
+		l := s.Text()
+		c := &genai.Content{}
+		if err := json.Unmarshal([]byte(l), c); err != nil {
+			return nil, err
+		}
+		contents = append(contents, c)
+	}
+	return contents, nil
 }
 
 func New(
@@ -93,6 +156,12 @@ func New(
 	client, err := genai.NewClient(ctx, clientConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	s, sok := session.FromContext(ctx)
+	var historyFile string
+	if sok {
+		historyFile = s.HistoryFile()
 	}
 
 	var funcs []*genai.FunctionDeclaration
@@ -114,6 +183,14 @@ func New(
 		})
 	}
 
+	var history []*genai.Content
+	if historyFile != "" {
+		history, err = loadHistory(historyFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
 			chat.SystemPrompt,
@@ -123,9 +200,9 @@ func New(
 		ThinkingConfig: &genai.ThinkingConfig{
 			IncludeThoughts: includeThoughts,
 		},
-	}, nil)
+	}, history)
 	if err != nil {
 		return nil, err
 	}
-	return &Agent{chat: chat}, nil
+	return &Agent{chat: chat, historyFile: historyFile}, nil
 }

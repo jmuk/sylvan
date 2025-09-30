@@ -24,7 +24,6 @@ func (gc *Config) Name() string {
 
 func (gc *Config) NewAgent(
 	ctx context.Context,
-	historyFile string,
 	toolDefs []tools.ToolDefinition,
 ) (chat.Agent, error) {
 	backend := genai.BackendUnspecified
