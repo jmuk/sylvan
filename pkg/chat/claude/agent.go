@@ -30,14 +30,12 @@ type Agent struct {
 
 func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) iter.Seq2[*chat.Part, error] {
 	return func(yield func(*chat.Part, error) bool) {
-		var msgsToSave []message
+		histSize := len(a.history)
 		for _, msg := range messages {
-			m := message{
+			a.history = append(a.history, message{
 				Part: &msg,
 				Role: chat.RoleUser,
-			}
-			a.history = append(a.history, m)
-			msgsToSave = append(msgsToSave, m)
+			})
 		}
 		respBody, err := a.request()
 		if err != nil {
@@ -48,11 +46,10 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) ite
 		ep := newEventProcessor(respBody, a)
 		for part, err := range ep.processEvents() {
 			if !yield(part, err) {
-				break
+				return
 			}
-			msgsToSave = append(msgsToSave, message{Part: part, Role: chat.RoleAssistant})
 		}
-		a.saveContent(msgsToSave)
+		a.saveContent(a.history[histSize:])
 	}
 }
 
