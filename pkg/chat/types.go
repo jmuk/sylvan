@@ -90,7 +90,6 @@ type Agent interface {
 type AgentFactory interface {
 	NewAgent(
 		ctx context.Context,
-		historyFile string,
 		toolDefs []tools.ToolDefinition,
 	) (Agent, error)
 }

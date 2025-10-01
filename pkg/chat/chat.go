@@ -67,7 +67,7 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 			return err
 		}
 		if agent == nil {
-			agent, err = c.factory.NewAgent(ctx, c.s.HistoryFile(), c.toolDefs)
+			agent, err = c.factory.NewAgent(ctx, c.toolDefs)
 			if err != nil {
 				return err
 			}
