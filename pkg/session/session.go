@@ -70,6 +70,14 @@ func FromContext(ctx context.Context) (*Session, bool) {
 	return s, ok
 }
 
+func (s *Session) ID() string {
+	return s.meta.SessionID
+}
+
+func (s *Session) Timestamp() time.Time {
+	return s.meta.Timestamp
+}
+
 func (s *Session) updateSessionsFile(workingDir string) error {
 	sessionsFile := filepath.Join(workingDir, sessionIDsFile)
 	sessionsContent, err := os.ReadFile(sessionsFile)
@@ -165,6 +173,9 @@ func (s *Session) GetLogger(name string) (*slog.Logger, error) {
 }
 
 func (s *Session) Close() error {
+	if !s.initialized {
+		return nil
+	}
 	var allerr error
 	for name, l := range s.loggers {
 		err := l.Close()
