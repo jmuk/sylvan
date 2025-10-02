@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"log/slog"
 	"net/url"
 	"os"
 	"path"
@@ -26,6 +27,7 @@ type Agent struct {
 	tools []tool
 
 	historyFile string
+	logger      *slog.Logger
 }
 
 func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) iter.Seq2[*chat.Part, error] {
@@ -45,6 +47,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) ite
 		defer respBody.Close()
 		ep := newEventProcessor(respBody, a)
 		for part, err := range ep.processEvents() {
+			a.logger.Info("got part", "part", part, "err", err)
 			if !yield(part, err) {
 				return
 			}
@@ -57,10 +60,16 @@ func New(ctx context.Context, config *Config, toolDefs []tools.ToolDefinition) (
 	agent := &Agent{
 		systemPrompt: chat.SystemPrompt,
 		config:       config,
+		logger:       slog.New(slog.DiscardHandler),
 	}
 	if s, ok := session.FromContext(ctx); ok {
 		agent.historyFile = s.HistoryFile()
 		if err := agent.loadHistory(); err != nil {
+			return nil, err
+		}
+		var err error
+		agent.logger, err = s.GetLogger("claude")
+		if err != nil {
 			return nil, err
 		}
 	}

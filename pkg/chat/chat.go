@@ -201,6 +201,7 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 			}
 			if sessionUpdated {
 				agent = nil
+				ctx = c.s.With(ctx)
 			}
 			continue
 		case commandList:
@@ -211,6 +212,7 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 		if err := c.s.Init(); err != nil {
 			return err
 		}
+		ctx = c.s.With(ctx)
 		if agent == nil {
 			agent, err = c.factory.NewAgent(ctx, c.toolDefs)
 			if err != nil {

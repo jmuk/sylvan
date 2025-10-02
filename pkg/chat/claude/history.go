@@ -32,6 +32,7 @@ func (a *Agent) loadHistory() error {
 }
 
 func (a *Agent) saveContent(ms []message) error {
+	a.logger.Info("save contents", "messages", ms)
 	encodes := make([][]byte, 0, len(ms))
 	for _, m := range ms {
 		encoded, err := json.Marshal(m)
