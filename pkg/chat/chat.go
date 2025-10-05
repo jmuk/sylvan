@@ -90,7 +90,7 @@ func (c *Chat) chooseNewSession() (*session.Session, error) {
 		return nil, err
 	}
 	if len(sessions) == 0 {
-		fmt.Println("No sessions found to select\n")
+		fmt.Println("No sessions found to select")
 		return nil, nil
 	}
 	sort.Slice(sessions, func(i, j int) bool {

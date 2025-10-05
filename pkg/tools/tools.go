@@ -51,6 +51,7 @@ func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (m
 	}
 
 	ctx = context.WithValue(ctx, loggerKey, l.With("tool_name", name, "request", in))
+	fmt.Println()
 	return p.process(ctx, in)
 }
 
