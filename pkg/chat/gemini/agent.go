@@ -21,7 +21,6 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(string(encoded))
 	decoded := &genai.Schema{}
 	if err := json.Unmarshal(encoded, decoded); err != nil {
 		return nil, err
