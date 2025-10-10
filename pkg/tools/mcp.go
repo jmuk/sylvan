@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"log/slog"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -68,19 +70,31 @@ type MCPTool struct {
 	factory transportFactory
 }
 
-func NewCommandMCP(name string, command []string) *MCPTool {
-	return &MCPTool{
+func newMCPTool() *MCPTool {
+	var mt *MCPTool
+	clientOpts := &mcp.ClientOptions{
+		LoggingMessageHandler: func(ctx context.Context, msg *mcp.LoggingMessageRequest) {
+			mt.logMessage(ctx, msg)
+		},
+	}
+	mt = &MCPTool{
 		client: mcp.NewClient(
 			&mcp.Implementation{
 				Name:    "sylvan",
 				Version: "v0.0.1",
 			},
-			&mcp.ClientOptions{},
+			clientOpts,
 		),
-		factory: &commandFactory{
-			command: command,
-		},
 	}
+	return mt
+}
+
+func NewCommandMCP(name string, command []string) *MCPTool {
+	mt := newMCPTool()
+	mt.factory = &commandFactory{
+		command: command,
+	}
+	return mt
 }
 
 func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
@@ -91,19 +105,12 @@ func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
 			h.Add(k, v)
 		}
 	}
-	return &MCPTool{
-		client: mcp.NewClient(
-			&mcp.Implementation{
-				Name:    "sylvan",
-				Version: "v0.0.1",
-			},
-			&mcp.ClientOptions{},
-		),
-		factory: &httpFactory{
-			endpoint: endpoint,
-			headers:  h,
-		},
+	mt := newMCPTool()
+	mt.factory = &httpFactory{
+		endpoint: endpoint,
+		headers:  h,
 	}
+	return mt
 }
 
 type mcpToolDefinition struct {
@@ -139,6 +146,31 @@ func (mtd *mcpToolDefinition) process(ctx context.Context, in map[string]any) (m
 	}
 
 	return r.(map[string]any), nil
+}
+
+func (mt *MCPTool) logMessage(ctx context.Context, msg *mcp.LoggingMessageRequest) {
+	s, ok := session.FromContext(ctx)
+	if !ok {
+		// Do nothing.
+		return
+	}
+	loggerName := "mcp"
+	p := msg.Params
+	if p.Logger != "" && !strings.Contains(p.Logger, "/") {
+		loggerName += "-" + p.Logger
+	}
+	logger, err := s.GetLogger(loggerName)
+	if err != nil {
+		log.Printf("Failed to get the logger: %v", err)
+		return
+	}
+	lvl := slog.LevelInfo
+	for _, lvl = range []slog.Level{slog.LevelDebug, slog.LevelError, slog.LevelWarn, slog.LevelInfo} {
+		if lvl.String() == string(p.Level) {
+			break
+		}
+	}
+	logger.Log(ctx, lvl, "log request", "data", p.Data)
 }
 
 func (mt *MCPTool) newSession(ctx context.Context) (*mcp.ClientSession, error) {
