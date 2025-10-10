@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -53,6 +54,7 @@ type Session struct {
 	sessionPath string
 
 	loggers map[string]*logger
+	files   map[string]*os.File
 
 	initialized bool
 }
@@ -149,6 +151,25 @@ func (s *Session) logPath() string {
 	return filepath.Join(s.sessionPath, "logs")
 }
 
+func (s *Session) GetLogFile(filename string) (io.Writer, error) {
+	if f, ok := s.files[filename]; ok {
+		return f, nil
+	}
+	if strings.Contains(filename, "/") {
+		return nil, fmt.Errorf("malformed filename %s", filename)
+	}
+	if err := os.MkdirAll(s.logPath(), 0755); err != nil {
+		return nil, err
+	}
+	p := filepath.Join(s.logPath(), filename)
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+	s.files[filename] = f
+	return f, nil
+}
+
 func (s *Session) GetLogger(name string) (*slog.Logger, error) {
 	l, ok := s.loggers[name]
 	if ok {
@@ -179,6 +200,12 @@ func (s *Session) Close() error {
 	var allerr error
 	for name, l := range s.loggers {
 		err := l.Close()
+		if err != nil {
+			allerr = errors.Join(allerr, fmt.Errorf("failed to close %s: %w", name, err))
+		}
+	}
+	for name, f := range s.files {
+		err := f.Close()
 		if err != nil {
 			allerr = errors.Join(allerr, fmt.Errorf("failed to close %s: %w", name, err))
 		}
@@ -268,6 +295,7 @@ func newFromID(sessionID, cacheDir string) (*Session, error) {
 		meta:        m,
 		sessionPath: sessionDir,
 		loggers:     map[string]*logger{},
+		files:       map[string]*os.File{},
 	}, nil
 }
 
@@ -288,6 +316,7 @@ func New(cwd string) (*Session, error) {
 			},
 			sessionPath: tempDir,
 			loggers:     map[string]*logger{},
+			files:       map[string]*os.File{},
 		}, nil
 	}
 
@@ -304,5 +333,6 @@ func New(cwd string) (*Session, error) {
 		},
 		sessionPath: sessionPath,
 		loggers:     map[string]*logger{},
+		files:       map[string]*os.File{},
 	}, nil
 }

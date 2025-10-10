@@ -1,0 +1,251 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"os/exec"
+	"strings"
+
+	"github.com/invopop/jsonschema"
+	"github.com/jmuk/sylvan/pkg/session"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+type transportFactory interface {
+	newTransport() mcp.Transport
+}
+
+type commandFactory struct {
+	command []string
+}
+
+func (cf *commandFactory) newTransport() mcp.Transport {
+	return &mcp.CommandTransport{
+		Command: exec.Command(cf.command[0], cf.command[1:]...),
+	}
+}
+
+type httpFactory struct {
+	endpoint string
+	headers  http.Header
+}
+
+type headerAddingRoundTripper struct {
+	headers      http.Header
+	roundTripper http.RoundTripper
+}
+
+func (rt *headerAddingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	for k, v := range rt.headers {
+		if _, ok := r.Header[k]; !ok {
+			r.Header[k] = v
+		}
+	}
+	return rt.roundTripper.RoundTrip(r)
+}
+
+func (hsf *httpFactory) newTransport() mcp.Transport {
+	transport := &mcp.SSEClientTransport{
+		Endpoint: hsf.endpoint,
+	}
+	if len(hsf.headers) > 0 {
+		transport.HTTPClient = &http.Client{
+			Transport: &headerAddingRoundTripper{
+				headers:      hsf.headers,
+				roundTripper: http.DefaultTransport,
+			},
+		}
+	}
+	return transport
+}
+
+type MCPTool struct {
+	name    string
+	client  *mcp.Client
+	factory transportFactory
+}
+
+func NewCommandMCP(name string, command []string) *MCPTool {
+	return &MCPTool{
+		client: mcp.NewClient(
+			&mcp.Implementation{
+				Name:    "sylvan",
+				Version: "v0.0.1",
+			},
+			&mcp.ClientOptions{},
+		),
+		factory: &commandFactory{
+			command: command,
+		},
+	}
+}
+
+func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
+	var h http.Header
+	if len(headers) > 0 {
+		h = http.Header{}
+		for k, v := range headers {
+			h.Add(k, v)
+		}
+	}
+	return &MCPTool{
+		client: mcp.NewClient(
+			&mcp.Implementation{
+				Name:    "sylvan",
+				Version: "v0.0.1",
+			},
+			&mcp.ClientOptions{},
+		),
+		factory: &httpFactory{
+			endpoint: endpoint,
+			headers:  h,
+		},
+	}
+}
+
+type mcpToolDefinition struct {
+	name        string
+	description string
+
+	inSchema  *jsonschema.Schema
+	outSchema *jsonschema.Schema
+
+	mt *MCPTool
+}
+
+func (mtd *mcpToolDefinition) Name() string {
+	return mtd.name
+}
+
+func (mtd *mcpToolDefinition) Description() string {
+	return mtd.description
+}
+
+func (mtd *mcpToolDefinition) RequestSchema() *jsonschema.Schema {
+	return mtd.inSchema
+}
+
+func (mtd *mcpToolDefinition) ResponseSchema() *jsonschema.Schema {
+	return mtd.outSchema
+}
+
+func (mtd *mcpToolDefinition) process(ctx context.Context, in map[string]any) (map[string]any, error) {
+	r, err := mtd.mt.process(ctx, mtd.name, in)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.(map[string]any), nil
+}
+
+func (mt *MCPTool) newSession(ctx context.Context) (*mcp.ClientSession, error) {
+	transport := mt.factory.newTransport()
+	if s, ok := session.FromContext(ctx); ok {
+		logname := strings.Replace(mt.name, "/", "_", -1)
+		if len(logname) > 64 {
+			logname = logname[:64]
+		}
+		logFile, err := s.GetLogFile(fmt.Sprintf("mcp-%s-log.txt", logname))
+		if err != nil {
+			return nil, err
+		}
+		transport = &mcp.LoggingTransport{
+			Transport: transport,
+			Writer:    logFile,
+		}
+	}
+	return mt.client.Connect(ctx, transport, nil)
+}
+
+func (mt *MCPTool) process(ctx context.Context, name string, in map[string]any) (any, error) {
+	session, err := mt.newSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      name,
+		Arguments: in,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result.IsError {
+		messages := &strings.Builder{}
+		for _, content := range result.Content {
+			if tc, ok := content.(*mcp.TextContent); ok {
+				if _, err := messages.WriteString(tc.Text); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return nil, &ToolError{errors.New(messages.String())}
+	}
+	if result.StructuredContent != nil {
+		return result.StructuredContent, nil
+	}
+	// TODO: support non-textual response.
+	b := strings.Builder{}
+	for _, content := range result.Content {
+		if tc, ok := content.(*mcp.TextContent); ok {
+			if _, err := b.WriteString(tc.Text); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return b.String(), nil
+}
+
+func (mt *MCPTool) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
+	session, err := mt.newSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+	var cursor string
+	var results []ToolDefinition
+	for {
+		tools, err := session.ListTools(ctx, &mcp.ListToolsParams{
+			Cursor: cursor,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tools.Tools {
+			inSchemaEnc, err := json.Marshal(t.InputSchema)
+			if err != nil {
+				return nil, err
+			}
+			inSchema := &jsonschema.Schema{}
+			if err := json.Unmarshal(inSchemaEnc, inSchema); err != nil {
+				return nil, err
+			}
+			var outSchema *jsonschema.Schema
+			if t.OutputSchema != nil {
+				outSchemaEnc, err := json.Marshal(t.OutputSchema)
+				if err != nil {
+					return nil, err
+				}
+				outSchema = &jsonschema.Schema{}
+				if err := json.Unmarshal(outSchemaEnc, outSchema); err != nil {
+					return nil, err
+				}
+			}
+			results = append(results, &mcpToolDefinition{
+				name:        t.Name,
+				description: t.Description,
+				inSchema:    inSchema,
+				outSchema:   outSchema,
+				mt:          mt,
+			})
+		}
+		if tools.NextCursor == "" {
+			break
+		}
+		cursor = tools.NextCursor
+	}
+	return results, nil
+}

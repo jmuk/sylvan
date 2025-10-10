@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -32,89 +33,36 @@ type ModelConfig interface {
 }
 
 type Config struct {
-	ModelConfigs []ModelConfig
-	ModelName    string
-	LogLevel     slog.Level
+	ModelConfigs []map[string]any `toml:"model_configs"`
+	MCP          []MCPConfig      `toml:"mcp"`
+	ModelName    string           `toml:"model_name"`
+	LogLevel     slog.Level       `toml:"log_level"`
 }
 
-func (c *Config) MarshalTOML() ([]byte, error) {
-	data := map[string]any{
-		"model_name":    c.ModelName,
-		"loglevel":      c.LogLevel,
-		"model_configs": []map[string]any{},
-	}
-	for i, mc := range c.ModelConfigs {
-		d, err := toml.Marshal(mc)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal %d-th config: %w", i, err)
-		}
-		m := map[string]any{}
-		if err := toml.Unmarshal(d, &m); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal %d-th config: %w", i, err)
-		}
-		m["type"] = ModelTypeGemini
-		data["model_configs"] = append(data["model_configs"].([]map[string]any), m)
-	}
-	return toml.Marshal(data)
-}
-
-func (c *Config) UnmarshalTOML(input any) error {
-	data, ok := input.(map[string]any)
+func modelConfigFrom(m map[string]any) (ModelConfig, error) {
+	mtData, ok := m["type"]
 	if !ok {
-		return fmt.Errorf("type mismatched: want map[string]any got %T", input)
+		return nil, fmt.Errorf("missing field type for model config")
 	}
-	c.ModelName, ok = data["model_name"].(string)
+	mtStr, ok := mtData.(string)
 	if !ok {
-		return fmt.Errorf(`model_name: want string got %T`, data["model_name"])
+		return nil, fmt.Errorf("type mismatch for type field: want string got %T", mtData)
 	}
-	if ll, ok := data["loglevel"]; !ok {
-		c.LogLevel = slog.LevelInfo
-	} else if lls, ok := ll.(string); !ok {
-		return fmt.Errorf(`loglevel: want string got %T`, ll)
-	} else {
-		loglevel := &c.LogLevel
-		if err := loglevel.UnmarshalText([]byte(lls)); err != nil {
-			return fmt.Errorf(`failed to parse loglevel: %w`, err)
-		}
+	marshaled, err := toml.Marshal(m)
+	if err != nil {
+		return nil, err
 	}
-
-	modelsData, ok := data["model_configs"]
-	if !ok {
-		return nil
+	switch ModelType(mtStr) {
+	case ModelTypeGemini:
+		geminiConfig := &gemini.Config{}
+		if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
+			return nil, err
+		}
+		return geminiConfig, nil
+	case ModelTypeClaude:
+		return claude.ParseConfig(marshaled)
 	}
-	models, ok := modelsData.([]map[string]any)
-	if !ok {
-		return fmt.Errorf(`model_configs: want []map[string]any got %T`, modelsData)
-	}
-	for i, modelConfig := range models {
-		mtData, ok := modelConfig["type"]
-		if !ok {
-			return fmt.Errorf("missing field type for model config")
-		}
-		mtStr, ok := mtData.(string)
-		if !ok {
-			return fmt.Errorf("type mismatch for type field: want string got %T", mtData)
-		}
-		marshaled, err := toml.Marshal(modelConfig)
-		if err != nil {
-			return fmt.Errorf(`failed to marshal %d-th config: %w`, i, err)
-		}
-		switch ModelType(mtStr) {
-		case ModelTypeGemini:
-			geminiConfig := &gemini.Config{}
-			if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
-				return fmt.Errorf(`failed to parse %d-th config: %w`, i, err)
-			}
-			c.ModelConfigs = append(c.ModelConfigs, geminiConfig)
-		case ModelTypeClaude:
-			claudeConfig, err := claude.ParseConfig(marshaled)
-			if err != nil {
-				return fmt.Errorf(`failed to aprse %d-th config: %w`, i, err)
-			}
-			c.ModelConfigs = append(c.ModelConfigs, claudeConfig)
-		}
-	}
-	return nil
+	return nil, fmt.Errorf("unknown model type %s", mtStr)
 }
 
 func (c *Config) NewAgent(
@@ -122,23 +70,35 @@ func (c *Config) NewAgent(
 	toolDefs []tools.ToolDefinition,
 ) (chat.Agent, error) {
 	for _, modelConfig := range c.ModelConfigs {
-		if modelConfig.Name() == c.ModelName {
-			return modelConfig.NewAgent(ctx, toolDefs)
+		cfg, err := modelConfigFrom(modelConfig)
+		if err != nil {
+			log.Printf("Failed to parse model config: %s", err)
+			continue
+		}
+		if cfg.Name() == c.ModelName {
+			return cfg.NewAgent(ctx, toolDefs)
 		}
 	}
 	return nil, errors.New("model config not found")
 }
 
 func LoadConfig() (*Config, error) {
+	defaultModel := &gemini.Config{
+		ConfigName: "gemini",
+		ModelName:  "gemini-2.5-flash",
+	}
+	marshaled, err := toml.Marshal(defaultModel)
+	if err != nil {
+		return nil, err
+	}
+	data := map[string]any{}
+	if err := toml.Unmarshal(marshaled, &data); err != nil {
+		return nil, err
+	}
 	config := &Config{
-		ModelConfigs: []ModelConfig{
-			&gemini.Config{
-				ConfigName: "gemini",
-				ModelName:  "gemini-2.5-flash",
-			},
-		},
-		ModelName: "gemini",
-		LogLevel:  slog.LevelInfo,
+		ModelConfigs: []map[string]any{data},
+		ModelName:    "gemini",
+		LogLevel:     slog.LevelInfo,
 	}
 
 	userConfigDir, err := os.UserConfigDir()
