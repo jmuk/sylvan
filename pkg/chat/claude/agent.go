@@ -11,6 +11,7 @@ import (
 	"path"
 
 	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
@@ -30,13 +31,13 @@ type Agent struct {
 	logger      *slog.Logger
 }
 
-func (a *Agent) SendMessageStream(ctx context.Context, messages []chat.Part) iter.Seq2[*chat.Part, error] {
-	return func(yield func(*chat.Part, error) bool) {
+func (a *Agent) SendMessageStream(ctx context.Context, messages []parts.Part) iter.Seq2[*parts.Part, error] {
+	return func(yield func(*parts.Part, error) bool) {
 		histSize := len(a.history)
 		for _, msg := range messages {
 			a.history = append(a.history, message{
 				Part: &msg,
-				Role: chat.RoleUser,
+				Role: parts.RoleUser,
 			})
 		}
 		respBody, err := a.request()

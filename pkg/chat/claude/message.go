@@ -1,10 +1,11 @@
 package claude
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
-	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 )
 
 type contentType string
@@ -13,6 +14,8 @@ const (
 	contentTypeThinking   contentType = "thinking"
 	contentTypeToolUse    contentType = "tool_use"
 	contentTypeToolResult contentType = "tool_result"
+	contentTypeText       contentType = "text"
+	contentTypeImage      contentType = "image"
 )
 
 type thinkingContent struct {
@@ -29,24 +32,43 @@ type toolUseContent struct {
 	Type  contentType    `json:"type"`
 }
 
+type textContent struct {
+	Text string      `json:"text"`
+	Type contentType `json:"type"`
+}
+
+type imageContent struct {
+	MediaType string      `json:"media_type"`
+	Data      string      `json:"data"`
+	Type      contentType `json:"type"`
+}
+
+func toImageContent(b *parts.Blob) *imageContent {
+	return &imageContent{
+		MediaType: b.MimeType,
+		Data:      base64.StdEncoding.EncodeToString(b.Data),
+		Type:      contentTypeImage,
+	}
+}
+
 // toolResultContent is the type of content for the tool use result.
 type toolResultContent struct {
 	ToolUseID string      `json:"tool_use_id"`
 	Type      contentType `json:"type"`
-	Content   string      `json:"content"`
+	Content   any         `json:"content"`
 	IsError   bool        `json:"is_error"`
 }
 
 type inputMessage struct {
-	Content any       `json:"content"`
-	Role    chat.Role `json:"role"`
+	Content any        `json:"content"`
+	Role    parts.Role `json:"role"`
 }
 
 // message keeps the part with the role, used to keep the
 // conversation history.
 type message struct {
-	Part *chat.Part `json:"part"`
-	Role chat.Role  `json:"role"`
+	Part *parts.Part `json:"part"`
+	Role parts.Role  `json:"role"`
 }
 
 func (m message) toInput() (inputMessage, error) {
@@ -74,32 +96,40 @@ func (m message) toInput() (inputMessage, error) {
 			},
 		}
 	} else if fr := m.Part.FunctionResponse; fr != nil {
-		var body string
+		c := toolResultContent{
+			ToolUseID: fr.ID,
+			Type:      contentTypeToolResult,
+			IsError:   fr.Error != nil,
+		}
 		if fr.Error != nil {
-			body = fr.Error.Error()
-		} else if len(fr.Response) == 1 {
-			for _, v := range fr.Response {
-				s, ok := v.(string)
-				if ok {
-					body = s
+			c.Content = fr.Error.Error()
+		} else {
+			if len(fr.Parts) == 0 {
+				c.Content = fr.Response
+			} else {
+				var contents []any
+				if fr.Response != nil {
+					encoded, err := json.Marshal(fr.Response)
+					if err != nil {
+						return inputMessage{}, err
+					}
+					contents = append(contents, textContent{
+						Text: string(encoded),
+						Type: contentTypeText,
+					})
 				}
+				for _, p := range fr.Parts {
+					if p.Image != nil {
+						contents = append(contents, toImageContent(p.Image))
+					}
+					if p.Text != "" {
+						contents = append(contents, textContent{Text: p.Text, Type: contentTypeText})
+					}
+				}
+				c.Content = contents
 			}
 		}
-		if body == "" {
-			encoded, err := json.Marshal(fr.Response)
-			if err != nil {
-				return inputMessage{}, err
-			}
-			body = string(encoded)
-		}
-		msg.Content = []toolResultContent{
-			{
-				ToolUseID: fr.ID,
-				Type:      contentTypeToolResult,
-				Content:   body,
-				IsError:   fr.Error != nil,
-			},
-		}
+		msg.Content = []toolResultContent{c}
 	} else {
 		return inputMessage{}, fmt.Errorf("unknown type of part: %v", m.Part)
 	}

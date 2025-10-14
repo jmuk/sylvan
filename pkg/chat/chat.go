@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/manifoldco/promptui"
@@ -231,10 +232,10 @@ func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) err
 		return err
 	}
 	ctx = c.s.With(ctx)
-	msgs := []Part{{Text: input}}
+	msgs := []parts.Part{{Text: input}}
 	for {
 		printed := false
-		var nextMsgs []Part
+		var nextMsgs []parts.Part
 		l.Debug("Sending", "messages", msgs)
 		for part, err := range agent.SendMessageStream(ctx, msgs) {
 			if err != nil {
@@ -247,7 +248,7 @@ func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) err
 			}
 			if call := part.FunctionCall; call != nil {
 				commandCtx, cancel := context.WithTimeout(ctx, time.Minute)
-				resp, err := c.trun.Run(commandCtx, call.Name, call.Args)
+				resp, ps, err := c.trun.Run(commandCtx, call.Name, call.Args)
 				cancel()
 				if err != nil {
 					var toolErr *tools.ToolError
@@ -256,11 +257,12 @@ func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) err
 					}
 					err = toolErr.Unwrap()
 				}
-				nextMsgs = append(nextMsgs, Part{
-					FunctionResponse: &FunctionResponse{
+				nextMsgs = append(nextMsgs, parts.Part{
+					FunctionResponse: &parts.FunctionResponse{
 						ID:       part.FunctionCall.ID,
 						Name:     part.FunctionCall.Name,
 						Response: resp,
+						Parts:    ps,
 						Error:    err,
 					},
 				})

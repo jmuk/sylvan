@@ -11,6 +11,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"google.golang.org/genai"
@@ -56,27 +57,75 @@ func (g *Agent) saveContent(c *genai.Content) error {
 	return os.WriteFile(g.historyFile, w.Bytes(), 0600)
 }
 
-func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.Seq2[*chat.Part, error] {
-	return func(yield func(*chat.Part, error) bool) {
-		inputParts := make([]*genai.Part, 0, len(parts))
-		for _, part := range parts {
+func blobToFunctionResponse(b *parts.Blob) *genai.FunctionResponseBlob {
+	return &genai.FunctionResponseBlob{
+		MIMEType: b.MimeType,
+		Data:     b.Data,
+	}
+}
+
+func partToFunctionResponse(p *parts.Part) (*genai.FunctionResponsePart, bool) {
+	if p.Audio != nil {
+		return &genai.FunctionResponsePart{InlineData: blobToFunctionResponse(p.Audio)}, true
+	}
+	if p.File != nil {
+		return &genai.FunctionResponsePart{InlineData: blobToFunctionResponse(p.File)}, true
+	}
+	if p.Image != nil {
+		return &genai.FunctionResponsePart{InlineData: blobToFunctionResponse(p.Image)}, true
+	}
+	if p.FileRef != nil {
+		return &genai.FunctionResponsePart{
+			FileData: &genai.FunctionResponseFileData{
+				FileURI:  p.FileRef.URL,
+				MIMEType: p.FileRef.MimeType,
+			},
+		}, true
+	}
+	return nil, false
+}
+
+func (g *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
+	return func(yield func(*parts.Part, error) bool) {
+		inputParts := make([]*genai.Part, 0, len(ps))
+		for _, part := range ps {
 			p := &genai.Part{}
 			if part.Text != "" {
 				p.Text = part.Text
 			}
-			if part.FunctionResponse != nil {
-				resp := make(map[string]any, len(part.FunctionResponse.Response))
-				for k, v := range part.FunctionResponse.Response {
-					resp[k] = v
+			if fr := part.FunctionResponse; fr != nil {
+				resp := &genai.FunctionResponse{
+					ID:       fr.ID,
+					Name:     fr.Name,
+					Response: map[string]any{},
 				}
-				if part.FunctionResponse.Error != nil {
-					resp["error"] = part.FunctionResponse.Error.Error()
+				if sp, ok := fr.Response.(map[string]any); ok && sp != nil {
+					for k, v := range sp {
+						resp.Response[k] = v
+					}
+					resp.Response = sp
+				} else {
+					resp.Response["is_error"] = map[string]any{
+						"is_error": fr.Error != nil,
+					}
+					if fr.Error == nil {
+						var messages []string
+						for _, p := range fr.Parts {
+							if p.Text != "" {
+								messages = append(messages, p.Text)
+							}
+						}
+						resp.Response["messages"] = messages
+					} else {
+						resp.Response["error"] = fr.Error.Error()
+					}
 				}
-				p.FunctionResponse = &genai.FunctionResponse{
-					ID:       part.FunctionResponse.ID,
-					Name:     part.FunctionResponse.Name,
-					Response: resp,
+				for _, p := range fr.Parts {
+					if frp, ok := partToFunctionResponse(p); ok {
+						resp.Parts = append(resp.Parts, frp)
+					}
 				}
+				p.FunctionResponse = resp
 			}
 			inputParts = append(inputParts, p)
 		}
@@ -98,9 +147,9 @@ func (g *Agent) SendMessageStream(ctx context.Context, parts []chat.Part) iter.S
 				continue
 			}
 			for _, part := range result.Candidates[0].Content.Parts {
-				p := &chat.Part{}
+				p := &parts.Part{}
 				if part.FunctionCall != nil {
-					p.FunctionCall = &chat.FunctionCall{
+					p.FunctionCall = &parts.FunctionCall{
 						ID:   part.FunctionCall.ID,
 						Name: part.FunctionCall.Name,
 						Args: part.FunctionCall.Args,

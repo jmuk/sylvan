@@ -11,7 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.0.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	google.golang.org/genai v1.21.0
+	google.golang.org/genai v1.30.0
 )
 
 require (

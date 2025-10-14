@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/invopop/jsonschema"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
@@ -29,7 +30,7 @@ type ToolDefinition interface {
 	Description() string
 	RequestSchema() *jsonschema.Schema
 	ResponseSchema() *jsonschema.Schema
-	process(ctx context.Context, in map[string]any) (map[string]any, error)
+	process(ctx context.Context, in map[string]any) (any, []*parts.Part, error)
 }
 
 type toolDefinition[Req any, Resp any] struct {
@@ -89,37 +90,37 @@ func (d *toolDefinition[Req, Resp]) ResponseSchema() *jsonschema.Schema {
 	return schema
 }
 
-func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]any) (map[string]any, error) {
+func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]any) (any, []*parts.Part, error) {
 	// Might not be ideal as it copies the data.
 	logger := getLogger(ctx)
 	jsonIn, err := json.Marshal(in)
 	if err != nil {
 		logger.Error("Failed to marshal input", "error", err)
-		return nil, err
+		return nil, nil, err
 	}
 	var req Req
 	if err := json.Unmarshal(jsonIn, &req); err != nil {
 		logger.Error("Failed to unmarshal input", "error", err)
-		return nil, err
+		return nil, nil, err
 	}
 	resp, err := d.proc(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if v := reflect.ValueOf(resp); v.CanConvert(reflect.TypeFor[string]()) {
 		return map[string]any{
 			d.respName: v.Convert(reflect.TypeFor[string]()).String(),
-		}, nil
+		}, nil, nil
 	}
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
 		logger.Error("Failed to marshal output", "error", err)
-		return nil, err
+		return nil, nil, err
 	}
 	out := map[string]any{}
 	if err := json.Unmarshal(jsonResp, &out); err != nil {
 		logger.Error("Failed to unmarshal output", "error", err)
-		return nil, err
+		return nil, nil, err
 	}
-	return out, nil
+	return out, nil, nil
 }

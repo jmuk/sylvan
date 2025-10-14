@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -139,13 +140,8 @@ func (mtd *mcpToolDefinition) ResponseSchema() *jsonschema.Schema {
 	return mtd.outSchema
 }
 
-func (mtd *mcpToolDefinition) process(ctx context.Context, in map[string]any) (map[string]any, error) {
-	r, err := mtd.mt.process(ctx, mtd.name, in)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.(map[string]any), nil
+func (mtd *mcpToolDefinition) process(ctx context.Context, in map[string]any) (any, []*parts.Part, error) {
+	return mtd.mt.process(ctx, mtd.name, in)
 }
 
 func (mt *MCPTool) logMessage(ctx context.Context, msg *mcp.LoggingMessageRequest) {
@@ -192,43 +188,59 @@ func (mt *MCPTool) newSession(ctx context.Context) (*mcp.ClientSession, error) {
 	return mt.client.Connect(ctx, transport, nil)
 }
 
-func (mt *MCPTool) process(ctx context.Context, name string, in map[string]any) (any, error) {
-	session, err := mt.newSession(ctx)
+func (mt *MCPTool) process(ctx context.Context, name string, in map[string]any) (any, []*parts.Part, error) {
+	sess, err := mt.newSession(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer session.Close()
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+	defer sess.Close()
+	var logger *slog.Logger
+	if s, ok := session.FromContext(ctx); ok {
+		var err error
+		if logger, err = s.GetLogger("mcp-tool"); err != nil {
+			return nil, nil, err
+		}
+	}
+	result, err := sess.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,
 		Arguments: in,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if result.IsError {
 		messages := &strings.Builder{}
 		for _, content := range result.Content {
 			if tc, ok := content.(*mcp.TextContent); ok {
 				if _, err := messages.WriteString(tc.Text); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 		}
-		return nil, &ToolError{errors.New(messages.String())}
+		return nil, nil, &ToolError{errors.New(messages.String())}
 	}
-	if result.StructuredContent != nil {
-		return result.StructuredContent, nil
-	}
-	// TODO: support non-textual response.
-	b := strings.Builder{}
+	var ps []*parts.Part
 	for _, content := range result.Content {
-		if tc, ok := content.(*mcp.TextContent); ok {
-			if _, err := b.WriteString(tc.Text); err != nil {
-				return nil, err
+		p := &parts.Part{}
+		if ac, ok := content.(*mcp.AudioContent); ok {
+			p.Audio = &parts.Blob{
+				MimeType: ac.MIMEType,
+				Data:     ac.Data,
 			}
+		} else if ic, ok := content.(*mcp.ImageContent); ok {
+			p.Image = &parts.Blob{
+				MimeType: ic.MIMEType,
+				Data:     ic.Data,
+			}
+		} else if tc, ok := content.(*mcp.TextContent); ok {
+			p.Text = tc.Text
+		} else {
+			logger.Error("unknown content", "content", content)
+			continue
 		}
+		ps = append(ps, p)
 	}
-	return b.String(), nil
+	return result.StructuredContent, ps, nil
 }
 
 func (mt *MCPTool) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {

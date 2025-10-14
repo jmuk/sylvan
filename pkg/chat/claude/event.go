@@ -7,7 +7,7 @@ import (
 	"io"
 	"iter"
 
-	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/sse"
 )
 
@@ -85,7 +85,7 @@ func newEventProcessor(reader io.Reader, agent *Agent) *eventProcessor {
 	}
 }
 
-func (ep *eventProcessor) processContentBlockStart(ev *sse.Event) (*chat.Part, error) {
+func (ep *eventProcessor) processContentBlockStart(ev *sse.Event) (*parts.Part, error) {
 	if ep.currentBlock != nil {
 		return nil, fmt.Errorf("content block start appears before closing a previous one")
 	}
@@ -95,23 +95,23 @@ func (ep *eventProcessor) processContentBlockStart(ev *sse.Event) (*chat.Part, e
 	}
 	cb := ep.currentBlock.ContentBlock
 	if cb.Type == blockTypeText && cb.Text != "" {
-		return &chat.Part{Text: cb.Text}, nil
+		return &parts.Part{Text: cb.Text}, nil
 	} else if cb.Type == blockTypeThinking && cb.Thinking != "" {
-		return &chat.Part{Text: cb.Thinking, Thought: true}, nil
+		return &parts.Part{Text: cb.Thinking, Thought: true}, nil
 	}
 	return nil, nil
 }
 
-func (ep *eventProcessor) processDeltaText(delta *contentBlockDelta) (*chat.Part, error) {
+func (ep *eventProcessor) processDeltaText(delta *contentBlockDelta) (*parts.Part, error) {
 	cb := ep.currentBlock
 	if cb.ContentBlock.Type != blockTypeText {
 		return nil, fmt.Errorf("type mismatch: want %s got text", cb.Type)
 	}
 	cb.ContentBlock.Text += delta.Delta.Text
-	return &chat.Part{Text: delta.Delta.Text}, nil
+	return &parts.Part{Text: delta.Delta.Text}, nil
 }
 
-func (ep *eventProcessor) processDeltaJSON(delta *contentBlockDelta) (*chat.Part, error) {
+func (ep *eventProcessor) processDeltaJSON(delta *contentBlockDelta) (*parts.Part, error) {
 	cb := ep.currentBlock
 	if cb.ContentBlock.Type != blockTypeToolUse {
 		return nil, fmt.Errorf("type mismatch: want %s got partial_json", cb.ContentBlock.Type)
@@ -122,21 +122,21 @@ func (ep *eventProcessor) processDeltaJSON(delta *contentBlockDelta) (*chat.Part
 	return nil, nil
 }
 
-func (ep *eventProcessor) processDeltaThinking(delta *contentBlockDelta) (*chat.Part, error) {
+func (ep *eventProcessor) processDeltaThinking(delta *contentBlockDelta) (*parts.Part, error) {
 	cb := ep.currentBlock
 	if cb.ContentBlock.Type != blockTypeThinking {
 		return nil, fmt.Errorf("type mismatch: want %s got thinking", cb.ContentBlock.Type)
 	}
 	cb.ContentBlock.Thinking += delta.Delta.Thinking
-	return &chat.Part{Text: delta.Delta.Thinking, Thought: true}, nil
+	return &parts.Part{Text: delta.Delta.Thinking, Thought: true}, nil
 }
 
-func (ep *eventProcessor) processDeltaSignature(delta *contentBlockDelta) (*chat.Part, error) {
+func (ep *eventProcessor) processDeltaSignature(delta *contentBlockDelta) (*parts.Part, error) {
 	ep.currentBlock.ContentBlock.Signature += delta.Delta.Signature
 	return nil, nil
 }
 
-func (ep *eventProcessor) processContentBlockDelta(ev *sse.Event) (*chat.Part, error) {
+func (ep *eventProcessor) processContentBlockDelta(ev *sse.Event) (*parts.Part, error) {
 	delta := &contentBlockDelta{}
 	if err := json.Unmarshal([]byte(ev.Data), delta); err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (ep *eventProcessor) processContentBlockDelta(ev *sse.Event) (*chat.Part, e
 	return nil, fmt.Errorf("unknown delta type %s", delta.Delta.Type)
 }
 
-func (ep *eventProcessor) processContentBlockStop(ev *sse.Event) (*chat.Part, bool, error) {
+func (ep *eventProcessor) processContentBlockStop(ev *sse.Event) (*parts.Part, bool, error) {
 	cb := ep.currentBlock
 	if cb == nil {
 		return nil, false, fmt.Errorf("content_block_stop appears without start")
@@ -170,11 +170,11 @@ func (ep *eventProcessor) processContentBlockStop(ev *sse.Event) (*chat.Part, bo
 	}()
 	switch cb.ContentBlock.Type {
 	case blockTypeText:
-		return &chat.Part{
+		return &parts.Part{
 			Text: cb.ContentBlock.Text,
 		}, false, nil
 	case blockTypeThinking:
-		return &chat.Part{
+		return &parts.Part{
 			Thought:           true,
 			Text:              cb.ContentBlock.Thinking,
 			ThinkingSignature: cb.ContentBlock.Signature,
@@ -184,7 +184,7 @@ func (ep *eventProcessor) processContentBlockStop(ev *sse.Event) (*chat.Part, bo
 		if err := json.Unmarshal([]byte(cb.ContentBlock.Text), &cb.ContentBlock.Input); err != nil {
 			return nil, false, err
 		}
-		part := &chat.Part{FunctionCall: &chat.FunctionCall{
+		part := &parts.Part{FunctionCall: &parts.FunctionCall{
 			ID:   cb.ContentBlock.ID,
 			Name: cb.ContentBlock.Name,
 			Args: cb.ContentBlock.Input,
@@ -194,8 +194,8 @@ func (ep *eventProcessor) processContentBlockStop(ev *sse.Event) (*chat.Part, bo
 	return nil, false, fmt.Errorf("unknown block type %s", cb.ContentBlock.Type)
 }
 
-func (ep *eventProcessor) processEvents() iter.Seq2[*chat.Part, error] {
-	return func(yield func(*chat.Part, error) bool) {
+func (ep *eventProcessor) processEvents() iter.Seq2[*parts.Part, error] {
+	return func(yield func(*parts.Part, error) bool) {
 		for {
 			ev, err := ep.scanner.Scan()
 			if errors.Is(err, io.EOF) {
@@ -234,7 +234,7 @@ func (ep *eventProcessor) processEvents() iter.Seq2[*chat.Part, error] {
 				}
 				ep.agent.history = append(ep.agent.history, message{
 					Part: part,
-					Role: chat.RoleAssistant,
+					Role: parts.RoleAssistant,
 				})
 			}
 		}

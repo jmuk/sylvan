@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/manifoldco/promptui"
 )
@@ -36,18 +37,18 @@ func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 	return &ToolRunner{defsMap: m}, nil
 }
 
-func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (map[string]any, error) {
+func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (any, []*parts.Part, error) {
 	p, ok := r.defsMap[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown tool %s", name)
+		return nil, nil, fmt.Errorf("unknown tool %s", name)
 	}
 	s, ok := session.FromContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("session not found")
+		return nil, nil, fmt.Errorf("session not found")
 	}
 	l, err := s.GetLogger("tool")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ctx = context.WithValue(ctx, loggerKey, l.With("tool_name", name, "request", in))
