@@ -69,6 +69,8 @@ type MCPTool struct {
 	name    string
 	client  *mcp.Client
 	factory transportFactory
+
+	clientSession *mcp.ClientSession
 }
 
 func newMCPTool() *MCPTool {
@@ -144,6 +146,15 @@ func (mtd *mcpToolDefinition) process(ctx context.Context, in map[string]any) (a
 	return mtd.mt.process(ctx, mtd.name, in)
 }
 
+func (mt *MCPTool) Close() error {
+	var err error
+	if mt.clientSession != nil {
+		err = mt.clientSession.Close()
+		mt.clientSession = nil
+	}
+	return err
+}
+
 func (mt *MCPTool) logMessage(ctx context.Context, msg *mcp.LoggingMessageRequest) {
 	s, ok := session.FromContext(ctx)
 	if !ok {
@@ -188,12 +199,23 @@ func (mt *MCPTool) newSession(ctx context.Context) (*mcp.ClientSession, error) {
 	return mt.client.Connect(ctx, transport, nil)
 }
 
+func (mt *MCPTool) getSession(ctx context.Context) (*mcp.ClientSession, error) {
+	if mt.clientSession != nil {
+		return mt.clientSession, nil
+	}
+	cs, err := mt.newSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mt.clientSession = cs
+	return cs, nil
+}
+
 func (mt *MCPTool) process(ctx context.Context, name string, in map[string]any) (any, []*parts.Part, error) {
-	sess, err := mt.newSession(ctx)
+	sess, err := mt.getSession(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer sess.Close()
 	var logger *slog.Logger
 	if s, ok := session.FromContext(ctx); ok {
 		var err error

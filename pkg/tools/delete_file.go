@@ -17,7 +17,11 @@ type deleteFileResponse struct {
 func (ft *FileTools) deleteFile(ctx context.Context, req deleteFileRequest) (*deleteFileResponse, error) {
 	logger := getLogger(ctx)
 	logger.Info("Deleting a file")
-	stat, err := ft.root.Stat(req.Filename)
+	root, err := ft.getRoot()
+	if err != nil {
+		return nil, err
+	}
+	stat, err := root.Stat(req.Filename)
 	if err != nil {
 		logger.Error("Failed to get the file information", "error", err)
 		return nil, &ToolError{err}
@@ -35,7 +39,7 @@ func (ft *FileTools) deleteFile(ctx context.Context, req deleteFileRequest) (*de
 	}
 
 	if !stat.IsDir() || !req.Recursive {
-		if err := ft.root.Remove(req.Filename); err != nil {
+		if err := root.Remove(req.Filename); err != nil {
 			logger.Error("Failed to delete the file", "error", err)
 			fmt.Printf("Failed to delete the file: %v\n", err)
 			return nil, &ToolError{err}
@@ -44,7 +48,7 @@ func (ft *FileTools) deleteFile(ctx context.Context, req deleteFileRequest) (*de
 		return &deleteFileResponse{}, nil
 	}
 
-	if err := ft.root.RemoveAll(req.Filename); err != nil {
+	if err := root.RemoveAll(req.Filename); err != nil {
 		logger.Error("Failed to delete the file recursively", "error", err)
 		fmt.Printf("Failed to delete the file: %v\n", err)
 		return nil, &ToolError{err}

@@ -16,7 +16,9 @@ import (
 )
 
 type Chat struct {
-	factory  AgentFactory
+	factory AgentFactory
+
+	toolMgr  []tools.Manager
 	toolDefs []tools.ToolDefinition
 
 	p    *promptui.Prompt
@@ -25,10 +27,18 @@ type Chat struct {
 	cwd  string
 }
 
-func New(factory AgentFactory, toolDefs []tools.ToolDefinition, cwd string) (*Chat, error) {
+func New(ctx context.Context, factory AgentFactory, toolMgr []tools.Manager, cwd string) (*Chat, error) {
 	s, err := session.New(cwd)
 	if err != nil {
 		return nil, err
+	}
+	var toolDefs []tools.ToolDefinition
+	for _, m := range toolMgr {
+		tds, err := m.ToolDefs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toolDefs = append(toolDefs, tds...)
 	}
 	trun, err := tools.NewToolRunner(toolDefs)
 	if err != nil {
@@ -39,6 +49,7 @@ func New(factory AgentFactory, toolDefs []tools.ToolDefinition, cwd string) (*Ch
 	}
 	return &Chat{
 		factory:  factory,
+		toolMgr:  toolMgr,
 		toolDefs: toolDefs,
 
 		p:    p,
@@ -49,7 +60,12 @@ func New(factory AgentFactory, toolDefs []tools.ToolDefinition, cwd string) (*Ch
 }
 
 func (c *Chat) Close() error {
-	return c.s.Close()
+	var errs []error
+	for _, m := range c.toolMgr {
+		errs = append(errs, m.Close())
+	}
+	errs = append(errs, c.s.Close())
+	return errors.Join(errs...)
 }
 
 type command int
@@ -202,6 +218,9 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 			}
 			if sessionUpdated {
 				agent = nil
+				for _, m := range c.toolMgr {
+					m.Close()
+				}
 				ctx = c.s.With(ctx)
 			}
 			continue

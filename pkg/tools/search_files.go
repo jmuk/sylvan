@@ -39,9 +39,13 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) (*s
 			return nil, &ToolError{err}
 		}
 	}
+	root, err := ft.getRoot()
+	if err != nil {
+		return nil, err
+	}
 	if req.PathPattern != "" {
 		fmt.Printf("Searching for %s with %s\n", req.PathPattern, req.Grep)
-		files, err := fs.Glob(ft.root.FS(), req.PathPattern)
+		files, err := fs.Glob(root.FS(), req.PathPattern)
 		if err != nil {
 			logger.Error("Failed to glob", "error", err)
 			return nil, &ToolError{err}
@@ -51,7 +55,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) (*s
 		}
 		for _, file := range files {
 			if contentMatch != nil {
-				data, err := ft.root.ReadFile(file)
+				data, err := root.ReadFile(file)
 				if err != nil {
 					return nil, &ToolError{err}
 				}
@@ -59,7 +63,7 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) (*s
 					continue
 				}
 			}
-			stat, err := ft.root.Stat(file)
+			stat, err := root.Stat(file)
 			if err != nil {
 				logger.Error("Failed to stat", "filename", file, "error", err)
 				return nil, &ToolError{err}
@@ -75,11 +79,11 @@ func (ft *FileTools) searchFile(ctx context.Context, req searchFilesRequest) (*s
 
 	resp := &searchFilesResponse{}
 	fmt.Printf("Searching with %s\n", req.Grep)
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		data, err := ft.root.ReadFile(path)
+		data, err := root.ReadFile(path)
 		if err != nil {
 			logger.Error("Failed to read file", "filename", path, "error", err)
 			return err

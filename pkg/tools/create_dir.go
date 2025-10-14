@@ -28,7 +28,11 @@ func (ft *FileTools) createDir(ctx context.Context, req createDirRequest) (*crea
 		return nil, &ToolError{errors.New("user declined to create the directory")}
 	}
 
-	if err := ft.root.MkdirAll(req.Dirname, 0755); err != nil {
+	root, err := ft.getRoot()
+	if err != nil {
+		return nil, err
+	}
+	if err := root.MkdirAll(req.Dirname, 0755); err != nil {
 		logger.Error("Failed to create the directory", "error", err)
 		fmt.Println("Failed to create the directory:", err)
 		return nil, &ToolError{err}

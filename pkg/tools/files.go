@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"os"
 )
 
@@ -9,26 +10,40 @@ import (
 // certain directory (typically the current directory of
 // the command started).
 type FileTools struct {
-	root *os.Root
+	root     *os.Root
+	rootPath string
 }
 
 // NewFiles creates a new FileTools in the directory.
-func NewFiles(rootPath string) (*FileTools, error) {
-	root, err := os.OpenRoot(rootPath)
+func NewFiles(rootPath string) *FileTools {
+	return &FileTools{
+		rootPath: rootPath,
+	}
+}
+
+func (ft *FileTools) getRoot() (*os.Root, error) {
+	if ft.root != nil {
+		return ft.root, nil
+	}
+	root, err := os.OpenRoot(ft.rootPath)
 	if err != nil {
 		return nil, err
 	}
-	return &FileTools{
-		root: root,
-	}, nil
+	ft.root = root
+	return ft.root, nil
 }
 
 // Close closes the handle to the root.
 func (ft *FileTools) Close() error {
-	return ft.root.Close()
+	if ft.root == nil {
+		return nil
+	}
+	root := ft.root
+	ft.root = nil
+	return root.Close()
 }
 
-func (ft *FileTools) ToolDefs() []ToolDefinition {
+func (ft *FileTools) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
 	return []ToolDefinition{
 		&toolDefinition[readFileRequest, *readFileResponse]{
 			name:        "read_file",
@@ -64,5 +79,5 @@ func (ft *FileTools) ToolDefs() []ToolDefinition {
 			description: "create a new directory",
 			proc:        ft.createDir,
 		},
-	}
+	}, nil
 }

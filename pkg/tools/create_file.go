@@ -38,10 +38,14 @@ func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) (newCo
 	}
 
 	dirname := filepath.Dir(filename)
-	if _, err := ft.root.Stat(dirname); os.IsNotExist(err) {
+	root, err := ft.getRoot()
+	if err != nil {
+		return "", err
+	}
+	if _, err := root.Stat(dirname); os.IsNotExist(err) {
 		fmt.Printf("Creating directory %s\n", dirname)
 		logger.Info("Creating directory", "dirname", dirname)
-		if err := ft.root.MkdirAll(dirname, 0755); err != nil {
+		if err := root.MkdirAll(dirname, 0755); err != nil {
 			logger.Error("Failed to create directory", "dirname", dirname, "error", err)
 			return "", &ToolError{err}
 		}
@@ -50,7 +54,7 @@ func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) (newCo
 		return "", &ToolError{err}
 	}
 
-	err = ft.root.WriteFile(filename, []byte(content), 0644)
+	err = root.WriteFile(filename, []byte(content), 0644)
 	if err != nil {
 		logger.Error("Failed to write", "error", err)
 		return "", &ToolError{err}

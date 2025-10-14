@@ -21,8 +21,12 @@ func (ft *FileTools) readFile(ctx context.Context, req readFileRequest) (*readFi
 	logger := getLogger(ctx)
 	logger.Debug("Reading file")
 	fmt.Println("Reading", req.Filename)
+	root, err := ft.getRoot()
+	if err != nil {
+		return nil, err
+	}
 	if req.Offset == 0 && req.Length <= 0 {
-		data, err := ft.root.ReadFile(req.Filename)
+		data, err := root.ReadFile(req.Filename)
 		if err != nil {
 			logger.Error("Failed to read", "error", err)
 			return nil, &ToolError{err}
@@ -33,14 +37,14 @@ func (ft *FileTools) readFile(ctx context.Context, req readFileRequest) (*readFi
 		}, nil
 	}
 
-	s, err := ft.root.Stat(req.Filename)
+	s, err := root.Stat(req.Filename)
 	if err != nil {
 		logger.Error("Failed to stat", "error", err)
 		return nil, &ToolError{err}
 	}
 	totalLength := s.Size()
 
-	f, err := ft.root.Open(req.Filename)
+	f, err := root.Open(req.Filename)
 	if err != nil {
 		logger.Error("Failed to open", "error", err)
 		return nil, &ToolError{err}

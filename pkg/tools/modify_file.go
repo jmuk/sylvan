@@ -30,7 +30,11 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) (str
 		return "", &ToolError{errors.New("both modifications and diff are empty")}
 	}
 	fmt.Printf("Modifying %s\n", req.Filename)
-	data, err := ft.root.ReadFile(req.Filename)
+	root, err := ft.getRoot()
+	if err != nil {
+		return "", err
+	}
+	data, err := root.ReadFile(req.Filename)
 	if err != nil {
 		logger.Error("Error reading file", "error", err)
 		return "", &ToolError{err}
@@ -113,7 +117,7 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) (str
 		return "", &ToolError{errors.New("user declined to accept the change")}
 	}
 
-	if err := ft.root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
+	if err := root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
 		logger.Error("Failed to write the file", "error", err)
 		return "", &ToolError{err}
 	}

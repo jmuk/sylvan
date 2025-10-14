@@ -145,12 +145,16 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*e
 	}, nil
 }
 
-func (et *ExecTool) ToolDefs() []ToolDefinition {
+func (et *ExecTool) Close() error {
+	return nil
+}
+
+func (et *ExecTool) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
 	return []ToolDefinition{
 		&toolDefinition[execCommandRequest, *execCommandResponse]{
 			name:        "exec_command",
 			description: "execute a command",
 			proc:        et.execCommand,
 		},
-	}
+	}, nil
 }
