@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -21,7 +22,7 @@ type Chat struct {
 	toolMgr  []tools.Manager
 	toolDefs []tools.ToolDefinition
 
-	p    *promptui.Prompt
+	rl   *readline.Instance
 	trun *tools.ToolRunner
 	s    *session.Session
 	cwd  string
@@ -44,15 +45,20 @@ func New(ctx context.Context, factory AgentFactory, toolMgr []tools.Manager, cwd
 	if err != nil {
 		return nil, err
 	}
-	p := &promptui.Prompt{
-		Label: ">",
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:       "> ",
+		HistoryLimit: -1,
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &Chat{
 		factory:  factory,
 		toolMgr:  toolMgr,
 		toolDefs: toolDefs,
 
-		p:    p,
+		rl:   rl,
 		trun: trun,
 		s:    s,
 		cwd:  cwd,
@@ -200,7 +206,7 @@ func (c *Chat) handleListCommand() {
 func (c *Chat) RunLoop(ctx context.Context) error {
 	var agent Agent = nil
 	for {
-		line, err := c.p.Run()
+		line, err := c.rl.Readline()
 		if err != nil {
 			if errors.Is(err, promptui.ErrEOF) || errors.Is(err, promptui.ErrAbort) {
 				return nil
