@@ -13,6 +13,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
+	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -114,6 +115,21 @@ func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
 		headers:  h,
 	}
 	return mt
+}
+
+func NewMCP(cfg config.MCPConfig) *MCPTool {
+	if cfg.Endpoint != "" {
+		name := cfg.Name
+		if name == "" {
+			name = cfg.Endpoint
+		}
+		return NewHTTPMCP(name, cfg.Endpoint, cfg.RequestHeaders)
+	}
+	name := cfg.Name
+	if name == "" {
+		name = cfg.Command[0]
+	}
+	return NewCommandMCP(name, cfg.Command)
 }
 
 type mcpToolDefinition struct {

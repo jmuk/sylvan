@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/agent"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
@@ -22,8 +22,8 @@ func (c *Config) Name() string {
 	return c.ConfigName
 }
 
-func (c *Config) NewAgent(ctx context.Context, toolDefs []tools.ToolDefinition) (chat.Agent, error) {
-	return New(ctx, c, toolDefs)
+func (c *Config) NewAgent(ctx context.Context, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
+	return New(ctx, c, systemPrompt, toolDefs)
 }
 
 func ParseConfig(data []byte) (*Config, error) {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
+	"github.com/jmuk/sylvan/pkg/config"
 )
 
 const (
@@ -168,6 +169,19 @@ func (s *Session) GetLogFile(filename string) (io.Writer, error) {
 	}
 	s.files[filename] = f
 	return f, nil
+}
+
+func (s *Session) LoadConfig() (*config.Config, error) {
+	var paths []string
+	if len(s.meta.WorkingDir) > 0 {
+		cacheDir, err := os.UserCacheDir()
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, config.ConfigFile(getWorkingDir(cacheDir, s.meta.WorkingDir)))
+	}
+	paths = append(paths, s.sessionPath)
+	return config.LoadConfigFiles(paths...)
 }
 
 func (s *Session) GetLogger(name string) (*slog.Logger, error) {

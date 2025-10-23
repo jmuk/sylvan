@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -57,9 +56,9 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []parts.Part) it
 	}
 }
 
-func New(ctx context.Context, config *Config, toolDefs []tools.ToolDefinition) (*Agent, error) {
+func New(ctx context.Context, config *Config, systemPrompt string, toolDefs []tools.ToolDefinition) (*Agent, error) {
 	agent := &Agent{
-		systemPrompt: chat.SystemPrompt,
+		systemPrompt: systemPrompt,
 		config:       config,
 		logger:       slog.New(slog.DiscardHandler),
 	}

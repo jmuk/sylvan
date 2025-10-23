@@ -10,42 +10,73 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/jmuk/sylvan/pkg/chat/agent"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/manifoldco/promptui"
 )
 
-type Chat struct {
-	factory AgentFactory
-
-	toolMgr  []tools.Manager
-	toolDefs []tools.ToolDefinition
-
-	rl   *readline.Instance
-	trun *tools.ToolRunner
-	s    *session.Session
-	cwd  string
+type chatSession struct {
+	s      *session.Session
+	ag     agent.Agent
+	mgrs   []tools.Manager
+	runner *tools.ToolRunner
 }
 
-func New(ctx context.Context, factory AgentFactory, toolMgr []tools.Manager, cwd string) (*Chat, error) {
+func (cs *chatSession) maybeInit(ctx context.Context, cwd string) error {
+	if cs.ag != nil {
+		return nil
+	}
+	ctx = cs.With(ctx)
+	cfg, err := cs.s.LoadConfig()
+	if err != nil {
+		return err
+	}
+	cs.mgrs = tools.NewManagers(cwd, cfg)
+	var toolDefs []tools.ToolDefinition
+	for _, mgr := range cs.mgrs {
+		dfs, err := mgr.ToolDefs(ctx)
+		if err != nil {
+			return err
+		}
+		toolDefs = append(toolDefs, dfs...)
+	}
+	cs.runner, err = tools.NewToolRunner(toolDefs)
+	if err != nil {
+		return err
+	}
+	cs.ag, err = newAgent(ctx, cfg, SystemPrompt, toolDefs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cs *chatSession) Close() error {
+	var errs error
+	for _, mgr := range cs.mgrs {
+		errs = errors.Join(errs, mgr.Close())
+	}
+	errs = errors.Join(errs, cs.s.Close())
+	return errs
+}
+
+func (cs *chatSession) With(ctx context.Context) context.Context {
+	return cs.s.With(ctx)
+}
+
+type Chat struct {
+	rl  *readline.Instance
+	cs  *chatSession
+	cwd string
+}
+
+func New(ctx context.Context, cwd string) (*Chat, error) {
 	s, err := session.New(cwd)
 	if err != nil {
 		return nil, err
 	}
-	var toolDefs []tools.ToolDefinition
-	for _, m := range toolMgr {
-		tds, err := m.ToolDefs(ctx)
-		if err != nil {
-			return nil, err
-		}
-		toolDefs = append(toolDefs, tds...)
-	}
-	trun, err := tools.NewToolRunner(toolDefs)
-	if err != nil {
-		return nil, err
-	}
-
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       "> ",
 		HistoryLimit: -1,
@@ -54,24 +85,17 @@ func New(ctx context.Context, factory AgentFactory, toolMgr []tools.Manager, cwd
 		return nil, err
 	}
 	return &Chat{
-		factory:  factory,
-		toolMgr:  toolMgr,
-		toolDefs: toolDefs,
-
-		rl:   rl,
-		trun: trun,
-		s:    s,
-		cwd:  cwd,
+		rl:  rl,
+		cs:  &chatSession{s: s},
+		cwd: cwd,
 	}, nil
 }
 
 func (c *Chat) Close() error {
-	var errs []error
-	for _, m := range c.toolMgr {
-		errs = append(errs, m.Close())
+	if c.cs != nil {
+		return c.cs.Close()
 	}
-	errs = append(errs, c.s.Close())
-	return errors.Join(errs...)
+	return nil
 }
 
 type command int
@@ -124,19 +148,19 @@ func (c *Chat) chooseNewSession() (*session.Session, error) {
 	})
 	var foundExisting bool
 	for _, s := range sessions {
-		if s.ID() == c.s.ID() {
+		if s.ID() == c.cs.s.ID() {
 			foundExisting = true
 			break
 		}
 	}
 	if !foundExisting {
-		sessions = append([]*session.Session{c.s}, sessions...)
+		sessions = append([]*session.Session{c.cs.s}, sessions...)
 	}
 	items := make([]string, 0, len(sessions))
 	var cursorPos int
 	for i, s := range sessions {
 		item := fmt.Sprintf("%s at %s", s.ID(), s.Timestamp().Format(time.RFC1123Z))
-		if s.ID() == c.s.ID() {
+		if s.ID() == c.cs.s.ID() {
 			item += " (current session)"
 			cursorPos = i
 		}
@@ -151,7 +175,7 @@ func (c *Chat) chooseNewSession() (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sessions[idx].ID() == c.s.ID() {
+	if sessions[idx].ID() == c.cs.s.ID() {
 		return nil, nil
 	}
 	return sessions[idx], nil
@@ -173,7 +197,7 @@ func (c *Chat) handleSessionCommands(args []string) (bool, error) {
 			if err != nil {
 				return false, err
 			}
-			if sessions[0].ID() != c.s.ID() {
+			if sessions[0].ID() != c.cs.s.ID() {
 				newSession = sessions[0]
 			}
 		} else {
@@ -187,11 +211,11 @@ func (c *Chat) handleSessionCommands(args []string) (bool, error) {
 	if newSession == nil {
 		return false, nil
 	}
-	if err := c.s.Close(); err != nil {
+	if err := c.cs.Close(); err != nil {
 		return false, err
 	}
-	c.s = newSession
-	fmt.Printf("Session is updated to %s\n", c.s.ID())
+	c.cs = &chatSession{s: newSession}
+	fmt.Printf("Session is updated to %s\n", c.cs.s.ID())
 	return true, nil
 }
 
@@ -204,7 +228,7 @@ func (c *Chat) handleListCommand() {
 }
 
 func (c *Chat) RunLoop(ctx context.Context) error {
-	var agent Agent = nil
+	ctx = c.cs.With(ctx)
 	for {
 		line, err := c.rl.Readline()
 		if err != nil {
@@ -223,11 +247,7 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 				return err
 			}
 			if sessionUpdated {
-				agent = nil
-				for _, m := range c.toolMgr {
-					m.Close()
-				}
-				ctx = c.s.With(ctx)
+				ctx = c.cs.With(ctx)
 			}
 			continue
 		case commandList:
@@ -235,34 +255,26 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 			continue
 		}
 
-		if err := c.s.Init(); err != nil {
+		if err := c.cs.maybeInit(ctx, c.cwd); err != nil {
 			return err
 		}
-		ctx = c.s.With(ctx)
-		if agent == nil {
-			agent, err = c.factory.NewAgent(ctx, c.toolDefs)
-			if err != nil {
-				return err
-			}
-		}
-		if err := c.HandleMessage(ctx, agent, line); err != nil {
+		if err := c.HandleMessage(ctx, line); err != nil {
 			return err
 		}
 	}
 }
 
-func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) error {
-	l, err := c.s.GetLogger("chat")
+func (c *Chat) HandleMessage(ctx context.Context, input string) error {
+	l, err := c.cs.s.GetLogger("chat")
 	if err != nil {
 		return err
 	}
-	ctx = c.s.With(ctx)
 	msgs := []parts.Part{{Text: input}}
 	for {
 		printed := false
 		var nextMsgs []parts.Part
 		l.Debug("Sending", "messages", msgs)
-		for part, err := range agent.SendMessageStream(ctx, msgs) {
+		for part, err := range c.cs.ag.SendMessageStream(ctx, msgs) {
 			if err != nil {
 				return err
 			}
@@ -273,7 +285,7 @@ func (c *Chat) HandleMessage(ctx context.Context, agent Agent, input string) err
 			}
 			if call := part.FunctionCall; call != nil {
 				commandCtx, cancel := context.WithTimeout(ctx, time.Minute)
-				resp, ps, err := c.trun.Run(commandCtx, call.Name, call.Args)
+				resp, ps, err := c.cs.runner.Run(commandCtx, call.Name, call.Args)
 				cancel()
 				if err != nil {
 					var toolErr *tools.ToolError

@@ -1,4 +1,4 @@
-package chat
+package agent
 
 import (
 	"context"
@@ -12,9 +12,10 @@ type Agent interface {
 	SendMessageStream(ctx context.Context, messages []parts.Part) iter.Seq2[*parts.Part, error]
 }
 
-type AgentFactory interface {
+type Factory interface {
 	NewAgent(
 		ctx context.Context,
+		systemPrompt string,
 		toolDefs []tools.ToolDefinition,
 	) (Agent, error)
 }

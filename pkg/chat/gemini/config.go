@@ -3,7 +3,7 @@ package gemini
 import (
 	"context"
 
-	"github.com/jmuk/sylvan/pkg/chat"
+	"github.com/jmuk/sylvan/pkg/chat/agent"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"google.golang.org/genai"
 )
@@ -24,8 +24,9 @@ func (gc *Config) Name() string {
 
 func (gc *Config) NewAgent(
 	ctx context.Context,
+	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
-) (chat.Agent, error) {
+) (agent.Agent, error) {
 	backend := genai.BackendUnspecified
 	if gc.Backend == genai.BackendGeminiAPI.String() {
 		backend = genai.BackendGeminiAPI
@@ -37,5 +38,5 @@ func (gc *Config) NewAgent(
 		Backend:  backend,
 		Project:  gc.Project,
 		Location: gc.Location,
-	}, toolDefs, !gc.excludeThoughts)
+	}, systemPrompt, toolDefs, !gc.excludeThoughts)
 }

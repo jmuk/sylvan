@@ -1,36 +1,12 @@
 package config
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jmuk/sylvan/pkg/chat"
-	"github.com/jmuk/sylvan/pkg/chat/claude"
-	"github.com/jmuk/sylvan/pkg/chat/gemini"
-	"github.com/jmuk/sylvan/pkg/tools"
 )
-
-type ModelType string
-
-const (
-	ModelTypeGemini ModelType = "gemini"
-	ModelTypeClaude ModelType = "claude"
-)
-
-type ModelConfig interface {
-	Name() string
-	// TODO: add common interface for chat
-	NewAgent(
-		ctx context.Context,
-		tools []tools.ToolDefinition,
-	) (chat.Agent, error)
-}
 
 type Config struct {
 	ModelConfigs []map[string]any `toml:"model_configs"`
@@ -39,108 +15,96 @@ type Config struct {
 	LogLevel     slog.Level       `toml:"log_level"`
 }
 
-func modelConfigFrom(m map[string]any) (ModelConfig, error) {
-	mtData, ok := m["type"]
-	if !ok {
-		return nil, fmt.Errorf("missing field type for model config")
-	}
-	mtStr, ok := mtData.(string)
-	if !ok {
-		return nil, fmt.Errorf("type mismatch for type field: want string got %T", mtData)
-	}
-	marshaled, err := toml.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	switch ModelType(mtStr) {
-	case ModelTypeGemini:
-		geminiConfig := &gemini.Config{}
-		if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
-			return nil, err
-		}
-		return geminiConfig, nil
-	case ModelTypeClaude:
-		return claude.ParseConfig(marshaled)
-	}
-	return nil, fmt.Errorf("unknown model type %s", mtStr)
+func ConfigFile(basePath string) string {
+	return filepath.Join(basePath, "config.toml")
 }
 
-func (c *Config) NewAgent(
-	ctx context.Context,
-	toolDefs []tools.ToolDefinition,
-) (chat.Agent, error) {
-	for _, modelConfig := range c.ModelConfigs {
-		cfg, err := modelConfigFrom(modelConfig)
-		if err != nil {
-			log.Printf("Failed to parse model config: %s", err)
-			continue
-		}
-		if cfg.Name() == c.ModelName {
-			return cfg.NewAgent(ctx, toolDefs)
-		}
-	}
-	return nil, errors.New("model config not found")
-}
-
-func LoadConfig() (*Config, error) {
-	defaultModel := &gemini.Config{
-		ConfigName: "gemini",
-		ModelName:  "gemini-2.5-flash",
-	}
-	marshaled, err := toml.Marshal(defaultModel)
-	if err != nil {
-		return nil, err
-	}
-	data := map[string]any{}
-	if err := toml.Unmarshal(marshaled, &data); err != nil {
-		return nil, err
-	}
-	config := &Config{
-		ModelConfigs: []map[string]any{data},
-		ModelName:    "gemini",
-		LogLevel:     slog.LevelInfo,
-	}
-
+func DefaultConfigFile() (string, error) {
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
+		return "", err
+	}
+	return ConfigFile(filepath.Join(userConfigDir, "sylvan")), nil
+}
+
+func DefaultConfig() (*Config, error) {
+	return &Config{
+		ModelConfigs: []map[string]any{},
+		ModelName:    "gemini",
+		LogLevel:     slog.LevelInfo,
+	}, nil
+}
+
+func ensureConfigDir(configFile string) error {
+	dirName := filepath.Dir(configFile)
+	return os.MkdirAll(dirName, 0755)
+}
+
+func loadConfigFile(configFile string, config *Config) error {
+	if err := ensureConfigDir(configFile); err != nil {
+		return err
+	}
+	_, err := toml.DecodeFile(configFile, config)
+	return err
+}
+
+func LoadConfigFile(configFile string) (*Config, error) {
+	config := &Config{}
+	if err := loadConfigFile(configFile, config); err != nil {
 		return nil, err
 	}
-	configDir := filepath.Join(userConfigDir, "sylvan")
-	if _, err := os.Stat(configDir); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(configDir, 0755); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
+	return config, nil
+}
 
-	configFile := filepath.Join(configDir, "config.toml")
-	if _, err := os.Stat(configFile); err != nil {
-		if os.IsNotExist(err) {
-			data, err := toml.Marshal(config)
-			if err != nil {
-				return nil, err
-			}
-			if err := os.WriteFile(configFile, data, 0644); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	} else {
-		data, err := os.ReadFile(configFile)
+func LoadConfigFiles(paths ...string) (*Config, error) {
+	// First, load the default config.
+	defaultPath, err := DefaultConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	config, err := LoadConfigFile(defaultPath)
+	if os.IsNotExist(err) {
+		config, err = DefaultConfig()
 		if err != nil {
 			return nil, err
 		}
-		loadedConfig := &Config{}
-		if err := toml.Unmarshal(data, loadedConfig); err != nil {
+		// Store the default config into the disk if missing.
+		if err := EditConfig(defaultPath, func(*Config) (*Config, error) { return config, nil }); err != nil {
 			return nil, err
 		}
-		config = loadedConfig
 	}
-
-	// TODO: load the local config file.
+	for _, p := range paths {
+		if err := loadConfigFile(p, config); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+	}
 	return config, nil
+}
+
+func EditConfig(configFile string, edit func(c *Config) (*Config, error)) error {
+	loadedConfig := &Config{}
+	if _, err := toml.DecodeFile(configFile, loadedConfig); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := ensureConfigDir(configFile); err != nil {
+		return err
+	}
+	newConfig, err := edit(loadedConfig)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(configFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := toml.NewEncoder(f).Encode(newConfig); err != nil {
+		return err
+	}
+	return nil
 }

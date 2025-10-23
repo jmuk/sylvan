@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"github.com/invopop/jsonschema"
-	"github.com/jmuk/sylvan/pkg/chat"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
@@ -198,6 +197,7 @@ func New(
 	ctx context.Context,
 	modelName string,
 	clientConfig *genai.ClientConfig,
+	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 	includeThoughts bool,
 ) (*Agent, error) {
@@ -241,7 +241,7 @@ func New(
 
 	chat, err := client.Chats.Create(ctx, "gemini-2.5-flash", &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(
-			chat.SystemPrompt,
+			systemPrompt,
 			genai.RoleUser,
 		),
 		Tools: []*genai.Tool{{FunctionDeclarations: funcs}},

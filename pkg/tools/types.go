@@ -124,8 +124,3 @@ func (d *toolDefinition[Req, Resp]) process(ctx context.Context, in map[string]a
 	}
 	return out, nil, nil
 }
-
-type Manager interface {
-	ToolDefs(ctx context.Context) ([]ToolDefinition, error)
-	Close() error
-}
