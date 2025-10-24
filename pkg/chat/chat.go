@@ -10,12 +10,14 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/jmuk/sylvan/pkg/chat/agent"
 	"github.com/jmuk/sylvan/pkg/chat/parts"
+	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/manifoldco/promptui"
 )
 
 type chatSession struct {
+	cfg    *config.Config
 	s      *session.Session
 	ag     agent.Agent
 	mgrs   []tools.Manager
@@ -27,11 +29,12 @@ func (cs *chatSession) maybeInit(ctx context.Context, cwd string) error {
 		return nil
 	}
 	ctx = cs.With(ctx)
-	cfg, err := cs.s.LoadConfig()
+	var err error
+	cs.cfg, err = cs.s.LoadConfig()
 	if err != nil {
 		return err
 	}
-	cs.mgrs = tools.NewManagers(cwd, cfg)
+	cs.mgrs = tools.NewManagers(cwd, cs.cfg)
 	var toolDefs []tools.ToolDefinition
 	for _, mgr := range cs.mgrs {
 		dfs, err := mgr.ToolDefs(ctx)
@@ -44,7 +47,7 @@ func (cs *chatSession) maybeInit(ctx context.Context, cwd string) error {
 	if err != nil {
 		return err
 	}
-	cs.ag, err = newAgent(ctx, cfg, SystemPrompt, toolDefs)
+	cs.ag, err = newAgent(ctx, cs.cfg, SystemPrompt, toolDefs)
 	if err != nil {
 		return err
 	}
@@ -121,6 +124,11 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 			continue
 		case commandList:
 			c.handleListCommand()
+			continue
+		case commandMCP:
+			if err := c.handleMCPCommand(ctx, args); err != nil {
+				return err
+			}
 			continue
 		}
 
