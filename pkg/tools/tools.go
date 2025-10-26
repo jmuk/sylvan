@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 
 	"github.com/jmuk/sylvan/pkg/chat/parts"
@@ -30,7 +31,7 @@ func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 	m := make(map[string]ToolDefinition, len(defs))
 	for _, d := range defs {
 		if _, ok := m[d.Name()]; ok {
-			return nil, fmt.Errorf("duplicated tool name %s", d.Name())
+			log.Printf("name %s duplicated, overwritten", d.Name())
 		}
 		m[d.Name()] = d
 	}

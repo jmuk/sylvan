@@ -124,12 +124,14 @@ func NewMCP(cfg config.MCPConfig) *MCPTool {
 			name = cfg.Endpoint
 		}
 		return NewHTTPMCP(name, cfg.Endpoint, cfg.RequestHeaders)
+	} else if len(cfg.Command) > 0 {
+		name := cfg.Name
+		if name == "" {
+			name = cfg.Command[0]
+		}
+		return NewCommandMCP(name, cfg.Command)
 	}
-	name := cfg.Name
-	if name == "" {
-		name = cfg.Command[0]
-	}
-	return NewCommandMCP(name, cfg.Command)
+	return nil
 }
 
 type mcpToolDefinition struct {
