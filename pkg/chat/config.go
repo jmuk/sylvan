@@ -10,6 +10,7 @@ import (
 	"github.com/jmuk/sylvan/pkg/chat/agent"
 	"github.com/jmuk/sylvan/pkg/chat/claude"
 	"github.com/jmuk/sylvan/pkg/chat/gemini"
+	"github.com/jmuk/sylvan/pkg/chat/openai"
 	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
@@ -19,6 +20,7 @@ type ModelType string
 const (
 	ModelTypeGemini ModelType = "gemini"
 	ModelTypeClaude ModelType = "claude"
+	ModelTypeOpenAI ModelType = "openai"
 )
 
 type ModelConfig interface {
@@ -53,6 +55,12 @@ func modelConfigFrom(m map[string]any) (ModelConfig, error) {
 		return geminiConfig, nil
 	case ModelTypeClaude:
 		return claude.ParseConfig(marshaled)
+	case ModelTypeOpenAI:
+		openaiConfig := &openai.Config{}
+		if err := toml.Unmarshal(marshaled, openaiConfig); err != nil {
+			return nil, err
+		}
+		return openaiConfig, nil
 	}
 	return nil, fmt.Errorf("unknown model type %s", mtStr)
 }
