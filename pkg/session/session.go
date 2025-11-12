@@ -199,7 +199,9 @@ func (s *Session) GetLogger(name string) (*slog.Logger, error) {
 	if err := os.MkdirAll(s.logPath(), 0755); err != nil {
 		return nil, err
 	}
-	l, err := newLogger(filepath.Join(s.logPath(), pathName), nil)
+	l, err := newLogger(filepath.Join(s.logPath(), pathName), &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
 	if err != nil {
 		return nil, err
 	}

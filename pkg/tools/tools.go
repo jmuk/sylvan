@@ -41,7 +41,7 @@ func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (any, []*parts.Part, error) {
 	p, ok := r.defsMap[name]
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown tool %s", name)
+		return nil, nil, &ToolError{fmt.Errorf("unknown tool %s", name)}
 	}
 	s, ok := session.FromContext(ctx)
 	if !ok {

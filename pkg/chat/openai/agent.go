@@ -49,6 +49,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 			input = responses.ResponseNewParamsInputUnion{
 				OfString: param.NewOpt(ps[0].Text),
 			}
+			logger.Debug("input", "input", input)
 		} else {
 			for _, p := range ps {
 				var msg responses.ResponseInputItemUnionParam
@@ -118,59 +119,77 @@ func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 				input.OfInputItemList = append(input.OfInputItemList, msg)
 			}
 		}
-		// TODO: support streaming for better UX.
-		resp, err := a.client.New(ctx, responses.ResponseNewParams{
+		logger.Debug("sending", "input", input)
+		st := a.client.NewStreaming(ctx, responses.ResponseNewParams{
 			Instructions:       param.NewOpt(a.systemPrompt),
 			PreviousResponseID: a.previousResponseID,
 			Input:              input,
 			Model:              a.model,
 			Tools:              a.tools,
 		})
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-		a.previousResponseID = param.NewOpt(resp.ID)
-		for _, output := range resp.Output {
-			switch output.Type {
-			case "message":
-				msg := output.AsMessage()
-				for _, content := range msg.Content {
-					if !yield(&parts.Part{
-						Text: content.Text,
-					}, nil) {
-						return
-					}
+
+		var fc *parts.FunctionCall
+		var funcCallParam string
+		for st.Next() {
+			ev := st.Current()
+			logger.Debug("Received event", "event", ev)
+			switch variant := ev.AsAny().(type) {
+			case responses.ResponseCreatedEvent:
+				a.previousResponseID = param.NewOpt(variant.Response.ID)
+			case responses.ResponseErrorEvent:
+				err := fmt.Errorf("failed: %s %s %s", variant.Code, variant.Message, variant.Param)
+				if !yield(nil, err) {
+					return
 				}
-			case "reasoning":
-				reason := output.AsReasoning()
-				for _, content := range reason.Content {
-					if !yield(&parts.Part{
-						Text:    content.Text,
-						Thought: true,
-					}, nil) {
-						return
-					}
+			case responses.ResponseTextDeltaEvent:
+				if !yield(&parts.Part{Text: variant.Delta}, nil) {
+					return
 				}
-			case "function_call":
-				fc := output.AsFunctionCall()
-				parsedArgs := map[string]any{}
-				if err := json.Unmarshal([]byte(fc.Arguments), &parsedArgs); err != nil {
+			case responses.ResponseTextDoneEvent:
+				if !yield(&parts.Part{Text: variant.Text}, nil) {
+					return
+				}
+			case responses.ResponseReasoningTextDeltaEvent:
+				if !yield(&parts.Part{Text: variant.Delta, Thought: true}, nil) {
+					return
+				}
+			case responses.ResponseReasoningTextDoneEvent:
+				if !yield(&parts.Part{Text: variant.Text, Thought: true}, nil) {
+					return
+				}
+			case responses.ResponseOutputItemAddedEvent:
+				if variant.Item.Type == "function_call" {
+					call := variant.Item.AsFunctionCall()
+					fc = &parts.FunctionCall{
+						Name: call.Name,
+						ID:   call.CallID,
+					}
+					funcCallParam = call.Arguments
+				}
+			case responses.ResponseFunctionCallArgumentsDeltaEvent:
+				funcCallParam += variant.Delta
+			case responses.ResponseFunctionCallArgumentsDoneEvent:
+				if fc == nil {
+					continue
+				}
+				fc.Args = map[string]any{}
+				if err := json.Unmarshal([]byte(funcCallParam), &fc.Args); err != nil {
+					funcCallParam = ""
 					if !yield(nil, err) {
 						return
 					}
-				} else if !yield(&parts.Part{
-					FunctionCall: &parts.FunctionCall{
-						ID:   fc.CallID,
-						Name: fc.Name,
-						Args: parsedArgs,
-					},
-				}, nil) {
+				}
+				funcCallParam = ""
+				if !yield(&parts.Part{FunctionCall: fc}, nil) {
 					return
 				}
+				fc = nil
 			default:
-				logger.Warn("unsupported output", "type", output.Type, "output", output)
+				logger.Error("unknown response")
 			}
+		}
+		if st.Err() != nil {
+			yield(nil, st.Err())
 		}
 	}
 }
