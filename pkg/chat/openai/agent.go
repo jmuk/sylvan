@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"iter"
@@ -26,11 +25,6 @@ type Agent struct {
 	previousResponseID param.Opt[string]
 }
 
-func dataURL(blob *parts.Blob) string {
-	encoded := base64.StdEncoding.EncodeToString(blob.Data)
-	return fmt.Sprintf("data:%s,%s", blob.MimeType, encoded)
-}
-
 func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
 	return func(yield func(*parts.Part, error) bool) {
 		logger := slog.New(slog.DiscardHandler)
@@ -52,71 +46,14 @@ func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 			logger.Debug("input", "input", input)
 		} else {
 			for _, p := range ps {
-				var msg responses.ResponseInputItemUnionParam
-				if p.Text != "" {
-					msg = responses.ResponseInputItemParamOfInputMessage(
-						responses.ResponseInputMessageContentListParam{
-							responses.ResponseInputContentParamOfInputText(p.Text),
-						},
-						"user",
-					)
-				} else if p.Audio != nil {
-					logger.Error("audio input is not supported", "part", p)
-					continue
-				} else if p.Image != nil {
-					msg = responses.ResponseInputItemParamOfInputMessage(
-						responses.ResponseInputMessageContentListParam{
-							responses.ResponseInputContentUnionParam{
-								OfInputImage: &responses.ResponseInputImageParam{
-									Detail:   responses.ResponseInputImageDetailAuto,
-									ImageURL: param.NewOpt(dataURL(p.Image)),
-									Type:     "input_image",
-								},
-							},
-						},
-						"user",
-					)
-				} else if p.File != nil {
-					msg = responses.ResponseInputItemParamOfInputMessage(
-						responses.ResponseInputMessageContentListParam{
-							responses.ResponseInputContentUnionParam{
-								OfInputFile: &responses.ResponseInputFileParam{
-									FileData: param.NewOpt(string(p.File.Data)),
-									Filename: param.NewOpt(p.File.Filename),
-									Type:     "input_file",
-								},
-							},
-						},
-						"user",
-					)
-				} else if fr := p.FunctionResponse; fr != nil {
-					var output map[string]any
-					if fr.Error != nil {
-						output = map[string]any{
-							"success":       false,
-							"error_message": fr.Error.Error(),
-						}
-					} else {
-						output = map[string]any{"success": true}
-						if len(fr.Parts) > 0 {
-							output["data"] = fr.Parts
-						}
-						if fr.Response != nil {
-							output["response"] = fr.Response
-						}
+				msg, ok, err := partToInput(p, logger)
+				if err != nil {
+					if !yield(nil, err) {
+						return
 					}
-					outputStr, err := json.Marshal(output)
-					if err != nil {
-						if !yield(nil, err) {
-							return
-						}
-					}
-					msg = responses.ResponseInputItemParamOfFunctionCallOutput(
-						p.FunctionResponse.ID,
-						string(outputStr),
-					)
+				} else if ok {
+					input.OfInputItemList = append(input.OfInputItemList, msg)
 				}
-				input.OfInputItemList = append(input.OfInputItemList, msg)
 			}
 		}
 		logger.Debug("sending", "input", input)
