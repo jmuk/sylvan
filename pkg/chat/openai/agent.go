@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 	"log/slog"
+	"os"
 
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
@@ -21,6 +22,27 @@ type Agent struct {
 	tools        []responses.ToolUnionParam
 
 	previousResponseID param.Opt[string]
+}
+
+func (a *Agent) updateHistory(responseID string) error {
+	if a.historyFile == "" {
+		return nil
+	}
+
+	if _, err := os.Stat(a.historyFile); err != nil {
+		if os.IsNotExist(err) {
+			return os.WriteFile(a.historyFile, []byte(responseID+"\n"), 0600)
+		}
+		return err
+	}
+
+	f, err := os.OpenFile(a.historyFile, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(responseID + "\n")
+	return err
 }
 
 func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
@@ -70,6 +92,11 @@ func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 		proc.processStream(st, yield)
 		if proc.responseID != "" {
 			a.previousResponseID = param.NewOpt(proc.responseID)
+			if err := a.updateHistory(proc.responseID); err != nil {
+				if !yield(nil, err) {
+					return
+				}
+			}
 		}
 
 		if st.Err() != nil {

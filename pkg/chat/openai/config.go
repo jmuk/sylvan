@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jmuk/sylvan/pkg/chat/agent"
+	"github.com/jmuk/sylvan/pkg/session"
 	"github.com/jmuk/sylvan/pkg/tools"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -45,6 +47,19 @@ func convertToolDef(d tools.ToolDefinition) (responses.ToolUnionParam, error) {
 	}, nil
 }
 
+func parseHistoryFile(filename string) (param.Opt[string], error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return param.Opt[string]{}, nil
+		}
+		return param.Opt[string]{}, err
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	return param.NewOpt(lines[len(lines)-1]), nil
+}
+
 func (c *Config) NewAgent(
 	ctx context.Context,
 	systemPrompt string,
@@ -71,10 +86,24 @@ func (c *Config) NewAgent(
 		}
 		toolParams = append(toolParams, toolParam)
 	}
+
+	var historyFile string
+	var lastResponseID param.Opt[string]
+	if sess, sok := session.FromContext(ctx); sok {
+		var err error
+		historyFile = sess.HistoryFile()
+		lastResponseID, err = parseHistoryFile(historyFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &Agent{
-		client:       responses.NewResponseService(opts...),
-		model:        c.ModelName,
-		systemPrompt: systemPrompt,
-		tools:        toolParams,
+		client:             responses.NewResponseService(opts...),
+		historyFile:        historyFile,
+		previousResponseID: lastResponseID,
+		model:              c.ModelName,
+		systemPrompt:       systemPrompt,
+		tools:              toolParams,
 	}, nil
 }
