@@ -2,8 +2,6 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"iter"
 	"log/slog"
 
@@ -65,66 +63,15 @@ func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 			Tools:              a.tools,
 		})
 
-		var fc *parts.FunctionCall
-		var funcCallParam string
-		for st.Next() {
-			ev := st.Current()
-			logger.Debug("Received event", "event", ev)
-			switch variant := ev.AsAny().(type) {
-			case responses.ResponseCreatedEvent:
-				a.previousResponseID = param.NewOpt(variant.Response.ID)
-			case responses.ResponseErrorEvent:
-				err := fmt.Errorf("failed: %s %s %s", variant.Code, variant.Message, variant.Param)
-				if !yield(nil, err) {
-					return
-				}
-			case responses.ResponseTextDeltaEvent:
-				if !yield(&parts.Part{Text: variant.Delta}, nil) {
-					return
-				}
-			case responses.ResponseTextDoneEvent:
-				if !yield(&parts.Part{Text: variant.Text}, nil) {
-					return
-				}
-			case responses.ResponseReasoningTextDeltaEvent:
-				if !yield(&parts.Part{Text: variant.Delta, Thought: true}, nil) {
-					return
-				}
-			case responses.ResponseReasoningTextDoneEvent:
-				if !yield(&parts.Part{Text: variant.Text, Thought: true}, nil) {
-					return
-				}
-			case responses.ResponseOutputItemAddedEvent:
-				if variant.Item.Type == "function_call" {
-					call := variant.Item.AsFunctionCall()
-					fc = &parts.FunctionCall{
-						Name: call.Name,
-						ID:   call.CallID,
-					}
-					funcCallParam = call.Arguments
-				}
-			case responses.ResponseFunctionCallArgumentsDeltaEvent:
-				funcCallParam += variant.Delta
-			case responses.ResponseFunctionCallArgumentsDoneEvent:
-				if fc == nil {
-					continue
-				}
-				fc.Args = map[string]any{}
-				if err := json.Unmarshal([]byte(funcCallParam), &fc.Args); err != nil {
-					funcCallParam = ""
-					if !yield(nil, err) {
-						return
-					}
-				}
-				funcCallParam = ""
-				if !yield(&parts.Part{FunctionCall: fc}, nil) {
-					return
-				}
-				fc = nil
-			default:
-				logger.Error("unknown response")
-			}
+		proc := &outputProcessor{
+			logger: logger,
 		}
+
+		proc.processStream(st, yield)
+		if proc.responseID != "" {
+			a.previousResponseID = param.NewOpt(proc.responseID)
+		}
+
 		if st.Err() != nil {
 			yield(nil, st.Err())
 		}
