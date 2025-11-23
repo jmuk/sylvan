@@ -1,6 +1,7 @@
 package parts
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,6 +77,10 @@ type Blob struct {
 	Data     []byte `json:"data"`
 	MimeType string `json:"mime_type"`
 	Filename string `json:"filename,omitempty"`
+}
+
+func (b *Blob) DataURL() string {
+	return fmt.Sprintf("data:%s;base64,%s", b.MimeType, base64.StdEncoding.EncodeToString(b.Data))
 }
 
 type FileRef struct {

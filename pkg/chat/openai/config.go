@@ -60,11 +60,7 @@ func parseHistoryFile(filename string) (param.Opt[string], error) {
 	return param.NewOpt(lines[len(lines)-1]), nil
 }
 
-func (c *Config) NewAgent(
-	ctx context.Context,
-	systemPrompt string,
-	toolDefs []tools.ToolDefinition,
-) (agent.Agent, error) {
+func (c *Config) GetOpts() ([]option.RequestOption, error) {
 	var opts []option.RequestOption
 	if c.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(c.BaseURL))
@@ -77,6 +73,18 @@ func (c *Config) NewAgent(
 		opts = append(opts, option.WithAPIKey(apikey))
 	} else if c.APIKey != "" {
 		opts = append(opts, option.WithAPIKey(c.APIKey))
+	}
+	return opts, nil
+}
+
+func (c *Config) NewAgent(
+	ctx context.Context,
+	systemPrompt string,
+	toolDefs []tools.ToolDefinition,
+) (agent.Agent, error) {
+	opts, err := c.GetOpts()
+	if err != nil {
+		return nil, err
 	}
 	var toolParams []responses.ToolUnionParam
 	for _, tdef := range toolDefs {

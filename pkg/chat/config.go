@@ -11,6 +11,7 @@ import (
 	"github.com/jmuk/sylvan/pkg/chat/claude"
 	"github.com/jmuk/sylvan/pkg/chat/gemini"
 	"github.com/jmuk/sylvan/pkg/chat/openai"
+	"github.com/jmuk/sylvan/pkg/chat/openai/completion"
 	"github.com/jmuk/sylvan/pkg/config"
 	"github.com/jmuk/sylvan/pkg/tools"
 )
@@ -18,9 +19,10 @@ import (
 type ModelType string
 
 const (
-	ModelTypeGemini ModelType = "gemini"
-	ModelTypeClaude ModelType = "claude"
-	ModelTypeOpenAI ModelType = "openai"
+	ModelTypeGemini     ModelType = "gemini"
+	ModelTypeClaude     ModelType = "claude"
+	ModelTypeOpenAI     ModelType = "openai"
+	ModelTypeOpenAIComp ModelType = "openai_comp"
 )
 
 type ModelConfig interface {
@@ -36,7 +38,7 @@ type ModelConfig interface {
 func modelConfigFrom(m map[string]any) (ModelConfig, error) {
 	mtData, ok := m["type"]
 	if !ok {
-		return nil, fmt.Errorf("missing field type for model config")
+		return nil, fmt.Errorf("	 field type for model config")
 	}
 	mtStr, ok := mtData.(string)
 	if !ok {
@@ -57,6 +59,12 @@ func modelConfigFrom(m map[string]any) (ModelConfig, error) {
 		return claude.ParseConfig(marshaled)
 	case ModelTypeOpenAI:
 		openaiConfig := &openai.Config{}
+		if err := toml.Unmarshal(marshaled, openaiConfig); err != nil {
+			return nil, err
+		}
+		return openaiConfig, nil
+	case ModelTypeOpenAIComp:
+		openaiConfig := &completion.Config{}
 		if err := toml.Unmarshal(marshaled, openaiConfig); err != nil {
 			return nil, err
 		}
