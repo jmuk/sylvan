@@ -65,7 +65,7 @@ type bodyData struct {
 
 func (a *Agent) buildRequestBody() ([]byte, error) {
 	body := bodyData{
-		Model:     a.config.Model,
+		Model:     a.modelName,
 		MaxTokens: a.config.MaxTokens,
 		Stream:    true,
 		System:    a.systemPrompt,

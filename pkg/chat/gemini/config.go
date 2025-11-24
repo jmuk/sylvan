@@ -10,7 +10,6 @@ import (
 
 type Config struct {
 	ConfigName      string `toml:"name"`
-	ModelName       string `toml:"model_name"`
 	APIKey          string `toml:"api_key,omitempty"`
 	Backend         string `toml:"backend,omitempty"`
 	Project         string `toml:"project,omitempty"`
@@ -24,6 +23,7 @@ func (gc *Config) Name() string {
 
 func (gc *Config) NewAgent(
 	ctx context.Context,
+	modelName string,
 	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 ) (agent.Agent, error) {
@@ -33,7 +33,7 @@ func (gc *Config) NewAgent(
 	} else if gc.Backend == genai.BackendVertexAI.String() {
 		backend = genai.BackendVertexAI
 	}
-	return New(ctx, gc.ModelName, &genai.ClientConfig{
+	return New(ctx, modelName, &genai.ClientConfig{
 		APIKey:   gc.APIKey,
 		Backend:  backend,
 		Project:  gc.Project,

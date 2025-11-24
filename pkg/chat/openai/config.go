@@ -20,7 +20,6 @@ type Config struct {
 	BaseURL       string `toml:"base_url"`
 	APIKey        string `toml:"api_key"`
 	APIKeyFromEnv string `toml:"api_key_env"`
-	ModelName     string `toml:"model_name"`
 }
 
 func (c *Config) Name() string {
@@ -79,6 +78,7 @@ func (c *Config) GetOpts() ([]option.RequestOption, error) {
 
 func (c *Config) NewAgent(
 	ctx context.Context,
+	modelName string,
 	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 ) (agent.Agent, error) {
@@ -110,7 +110,7 @@ func (c *Config) NewAgent(
 		client:             responses.NewResponseService(opts...),
 		historyFile:        historyFile,
 		previousResponseID: lastResponseID,
-		model:              c.ModelName,
+		model:              modelName,
 		systemPrompt:       systemPrompt,
 		tools:              toolParams,
 	}, nil

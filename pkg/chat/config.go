@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -16,26 +15,27 @@ import (
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
-type ModelType string
+type BackendType string
 
 const (
-	ModelTypeGemini     ModelType = "gemini"
-	ModelTypeClaude     ModelType = "claude"
-	ModelTypeOpenAI     ModelType = "openai"
-	ModelTypeOpenAIComp ModelType = "openai_comp"
+	BackendTypeGemini     BackendType = "gemini"
+	BackendTypeClaude     BackendType = "claude"
+	BackendTypeOpenAI     BackendType = "openai"
+	BackendTypeOpenAIComp BackendType = "openai_comp"
 )
 
-type ModelConfig interface {
+type BackendConfig interface {
 	Name() string
 	// TODO: add common interface for chat
 	NewAgent(
 		ctx context.Context,
+		modelName string,
 		systemPrompt string,
 		tools []tools.ToolDefinition,
 	) (agent.Agent, error)
 }
 
-func modelConfigFrom(m map[string]any) (ModelConfig, error) {
+func backendFrom(m map[string]any) (BackendConfig, error) {
 	mtData, ok := m["type"]
 	if !ok {
 		return nil, fmt.Errorf("	 field type for model config")
@@ -48,22 +48,22 @@ func modelConfigFrom(m map[string]any) (ModelConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch ModelType(mtStr) {
-	case ModelTypeGemini:
+	switch BackendType(mtStr) {
+	case BackendTypeGemini:
 		geminiConfig := &gemini.Config{}
 		if err := toml.Unmarshal(marshaled, geminiConfig); err != nil {
 			return nil, err
 		}
 		return geminiConfig, nil
-	case ModelTypeClaude:
+	case BackendTypeClaude:
 		return claude.ParseConfig(marshaled)
-	case ModelTypeOpenAI:
+	case BackendTypeOpenAI:
 		openaiConfig := &openai.Config{}
 		if err := toml.Unmarshal(marshaled, openaiConfig); err != nil {
 			return nil, err
 		}
 		return openaiConfig, nil
-	case ModelTypeOpenAIComp:
+	case BackendTypeOpenAIComp:
 		openaiConfig := &completion.Config{}
 		if err := toml.Unmarshal(marshaled, openaiConfig); err != nil {
 			return nil, err
@@ -79,15 +79,15 @@ func newAgent(
 	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 ) (agent.Agent, error) {
-	for _, modelConfig := range c.ModelConfigs {
-		cfg, err := modelConfigFrom(modelConfig)
+	for _, backend := range c.Backends {
+		cfg, err := backendFrom(backend)
 		if err != nil {
 			log.Printf("Failed to parse model config: %s", err)
 			continue
 		}
-		if cfg.Name() == c.ModelName {
-			return cfg.NewAgent(ctx, systemPrompt, toolDefs)
+		if cfg.Name() == c.BackendName {
+			return cfg.NewAgent(ctx, c.ModelName, systemPrompt, toolDefs)
 		}
 	}
-	return nil, errors.New("model config not found")
+	return nil, fmt.Errorf("backend %s not found", c.BackendName)
 }

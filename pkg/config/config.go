@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	ModelConfigs []map[string]any `toml:"model_configs"`
-	MCP          []MCPConfig      `toml:"mcp"`
-	ModelName    string           `toml:"model_name"`
-	LogLevel     slog.Level       `toml:"log_level"`
+	Backends    []map[string]any `toml:"backends"`
+	MCP         []MCPConfig      `toml:"mcp"`
+	BackendName string           `toml:"backend_name"`
+	ModelName   string           `toml:"model_name"`
+	LogLevel    slog.Level       `toml:"log_level"`
 }
 
 func ConfigFile(basePath string) string {
@@ -29,9 +30,10 @@ func DefaultConfigFile() (string, error) {
 
 func DefaultConfig() (*Config, error) {
 	return &Config{
-		ModelConfigs: []map[string]any{},
-		ModelName:    "gemini",
-		LogLevel:     slog.LevelInfo,
+		Backends:    []map[string]any{},
+		BackendName: "gemini",
+		ModelName:   "gemini-2.5-flash",
+		LogLevel:    slog.LevelInfo,
 	}, nil
 }
 

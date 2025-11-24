@@ -14,7 +14,6 @@ type Config struct {
 	APIKey           string `toml:"api_key"`
 	APIKeyFromEnv    string `toml:"api_key_env"`
 	AnthropicVersion string `toml:"anthropic_version"`
-	Model            string `toml:"model"`
 	MaxTokens        int    `toml:"max_tokens"`
 }
 
@@ -22,8 +21,8 @@ func (c *Config) Name() string {
 	return c.ConfigName
 }
 
-func (c *Config) NewAgent(ctx context.Context, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
-	return New(ctx, c, systemPrompt, toolDefs)
+func (c *Config) NewAgent(ctx context.Context, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
+	return New(ctx, c, modelName, systemPrompt, toolDefs)
 }
 
 func ParseConfig(data []byte) (*Config, error) {
@@ -39,8 +38,6 @@ func DefaultConfig() *Config {
 		BaseURL:          "https://api.anthropic.com/",
 		APIKeyFromEnv:    "ANTHROPIC_API_KEY",
 		AnthropicVersion: "2023-06-01",
-		// TODO -- possibly use models API?
-		Model:     "claude-sonnet-4-20250514",
-		MaxTokens: 32768,
+		MaxTokens:        32768,
 	}
 }

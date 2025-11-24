@@ -55,6 +55,7 @@ func (c *Config) Name() string {
 
 func (c *Config) NewAgent(
 	ctx context.Context,
+	modelName string,
 	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 ) (agent.Agent, error) {
@@ -77,7 +78,7 @@ func (c *Config) NewAgent(
 	return &Agent{
 		client:       openai.NewChatCompletionService(opts...),
 		historyFile:  historyFile,
-		modelName:    c.ModelName,
+		modelName:    modelName,
 		systemPrompt: systemPrompt,
 		tools:        toolParams,
 		history: []openai.ChatCompletionMessageParamUnion{

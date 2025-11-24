@@ -17,6 +17,7 @@ import (
 
 type Agent struct {
 	history      []message
+	modelName    string
 	systemPrompt string
 
 	url    *url.URL
@@ -56,8 +57,9 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []parts.Part) it
 	}
 }
 
-func New(ctx context.Context, config *Config, systemPrompt string, toolDefs []tools.ToolDefinition) (*Agent, error) {
+func New(ctx context.Context, config *Config, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (*Agent, error) {
 	agent := &Agent{
+		modelName:    modelName,
 		systemPrompt: systemPrompt,
 		config:       config,
 		logger:       slog.New(slog.DiscardHandler),
