@@ -73,6 +73,14 @@ func FromContext(ctx context.Context) (*Session, bool) {
 	return s, ok
 }
 
+func LoggerFromContext(ctx context.Context, name string) (*slog.Logger, error) {
+	s, ok := FromContext(ctx)
+	if !ok {
+		return slog.New(slog.DiscardHandler), nil
+	}
+	return s.GetLogger(name)
+}
+
 func (s *Session) ID() string {
 	return s.meta.SessionID
 }

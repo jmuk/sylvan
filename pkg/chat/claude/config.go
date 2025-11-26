@@ -25,6 +25,10 @@ func (c *Config) NewAgent(ctx context.Context, modelName string, systemPrompt st
 	return New(ctx, c, modelName, systemPrompt, toolDefs)
 }
 
+func (c *Config) Models(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func ParseConfig(data []byte) (*Config, error) {
 	config := *DefaultConfig()
 	if err := toml.Unmarshal(data, &config); err != nil {

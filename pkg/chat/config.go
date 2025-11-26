@@ -33,6 +33,7 @@ type BackendConfig interface {
 		systemPrompt string,
 		tools []tools.ToolDefinition,
 	) (agent.Agent, error)
+	Models(ctx context.Context) ([]string, error)
 }
 
 func backendFrom(m map[string]any) (BackendConfig, error) {
@@ -73,12 +74,7 @@ func backendFrom(m map[string]any) (BackendConfig, error) {
 	return nil, fmt.Errorf("unknown model type %s", mtStr)
 }
 
-func newAgent(
-	ctx context.Context,
-	c *config.Config,
-	systemPrompt string,
-	toolDefs []tools.ToolDefinition,
-) (agent.Agent, error) {
+func getBackend(c *config.Config) (BackendConfig, error) {
 	for _, backend := range c.Backends {
 		cfg, err := backendFrom(backend)
 		if err != nil {
@@ -86,8 +82,21 @@ func newAgent(
 			continue
 		}
 		if cfg.Name() == c.BackendName {
-			return cfg.NewAgent(ctx, c.ModelName, systemPrompt, toolDefs)
+			return cfg, nil
 		}
 	}
 	return nil, fmt.Errorf("backend %s not found", c.BackendName)
+}
+
+func newAgent(
+	ctx context.Context,
+	c *config.Config,
+	systemPrompt string,
+	toolDefs []tools.ToolDefinition,
+) (agent.Agent, error) {
+	cfg, err := getBackend(c)
+	if err != nil {
+		return nil, err
+	}
+	return cfg.NewAgent(ctx, c.ModelName, systemPrompt, toolDefs)
 }

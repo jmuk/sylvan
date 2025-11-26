@@ -130,6 +130,11 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 				return err
 			}
 			continue
+		case commandModels:
+			if err := c.handleModelsCommand(ctx, args); err != nil {
+				return err
+			}
+			continue
 		}
 
 		if err := c.cs.maybeInit(ctx, c.cwd); err != nil {

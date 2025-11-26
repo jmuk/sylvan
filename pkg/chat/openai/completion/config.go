@@ -86,3 +86,7 @@ func (c *Config) NewAgent(
 		},
 	}, nil
 }
+
+func (c *Config) Models(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
