@@ -2,12 +2,9 @@ package claude
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"iter"
 	"log/slog"
 	"net/url"
-	"os"
 	"path"
 
 	"github.com/jmuk/sylvan/pkg/chat/parts"
@@ -83,18 +80,11 @@ func New(ctx context.Context, config *Config, modelName string, systemPrompt str
 			InputSchema: toolDef.RequestSchema(),
 		})
 	}
-	if config.APIKey == "" {
-		if config.APIKeyFromEnv == "" {
-			return nil, errors.New("either api-key or api-key-from-env must be specified")
-		}
-		agent.apiKey = os.Getenv(config.APIKeyFromEnv)
-		if agent.apiKey == "" {
-			return nil, fmt.Errorf("env variable %s not defined", config.APIKeyFromEnv)
-		}
-	} else {
-		agent.apiKey = config.APIKey
-	}
 	var err error
+	agent.apiKey, err = config.apiKey()
+	if err != nil {
+		return nil, err
+	}
 	agent.url, err = url.Parse(config.BaseURL)
 	if err != nil {
 		return nil, err

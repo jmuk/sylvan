@@ -2,6 +2,8 @@ package claude
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jmuk/sylvan/pkg/chat/agent"
@@ -21,12 +23,22 @@ func (c *Config) Name() string {
 	return c.ConfigName
 }
 
-func (c *Config) NewAgent(ctx context.Context, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
-	return New(ctx, c, modelName, systemPrompt, toolDefs)
+func (c *Config) apiKey() (string, error) {
+	if c.APIKeyFromEnv != "" {
+		apiKey := os.Getenv(c.APIKeyFromEnv)
+		if apiKey == "" {
+			return "", fmt.Errorf("env variable %s not defined", c.APIKeyFromEnv)
+		}
+		return apiKey, nil
+	}
+	if c.APIKey == "" {
+		return "", fmt.Errorf("either api_key or api_key_env msut be specified")
+	}
+	return c.APIKey, nil
 }
 
-func (c *Config) Models(ctx context.Context) ([]string, error) {
-	return nil, nil
+func (c *Config) NewAgent(ctx context.Context, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
+	return New(ctx, c, modelName, systemPrompt, toolDefs)
 }
 
 func ParseConfig(data []byte) (*Config, error) {
