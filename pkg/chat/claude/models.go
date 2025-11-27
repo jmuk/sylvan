@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"path"
 
 	"github.com/jmuk/sylvan/pkg/session"
 )
@@ -37,7 +36,7 @@ func (c *Config) Models(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	u.Path = path.Join(u.Path, "/v1/models")
+	u = u.JoinPath("v1", "models")
 
 	rheaders := http.Header{}
 	rheaders.Add("x-api-key", apiKey)
@@ -49,7 +48,9 @@ func (c *Config) Models(ctx context.Context) ([]string, error) {
 	var pageToken string
 	for {
 		if pageToken != "" {
-			u.Query().Add("after_id", pageToken)
+			u.RawQuery = url.Values(map[string][]string{
+				"after_id": {pageToken},
+			}).Encode()
 		}
 		resp, err := client.Do(&http.Request{
 			Method: http.MethodGet,

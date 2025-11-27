@@ -5,7 +5,6 @@ import (
 	"iter"
 	"log/slog"
 	"net/url"
-	"path"
 
 	"github.com/jmuk/sylvan/pkg/chat/parts"
 	"github.com/jmuk/sylvan/pkg/session"
@@ -89,6 +88,6 @@ func New(ctx context.Context, config *Config, modelName string, systemPrompt str
 	if err != nil {
 		return nil, err
 	}
-	agent.url.Path = path.Join(agent.url.Path, "/v1/messages")
+	agent.url = agent.url.JoinPath("v1", "messages")
 	return agent, nil
 }
