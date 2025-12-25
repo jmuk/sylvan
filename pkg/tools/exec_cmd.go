@@ -109,7 +109,11 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*e
 		params = whiteSpaces.Split(newCommandline, -1)
 	} else if answer != confirmationYes {
 		logger.Error("User declined to execute")
-		return nil, &ToolError{errors.New("user declied to execute")}
+		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
+		if err != nil {
+			return nil, err
+		}
+		return nil, &ToolError{fmt.Errorf("user declied to execute: `%s`", msg)}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)

@@ -2,8 +2,9 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
+
+	"github.com/manifoldco/promptui"
 )
 
 type deleteFileRequest struct {
@@ -35,7 +36,11 @@ func (ft *FileTools) deleteFile(ctx context.Context, req deleteFileRequest) (*de
 	}
 	if answer != confirmationYes {
 		logger.Error("User declined to delete the file")
-		return nil, &ToolError{errors.New("user declined to delete the file")}
+		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
+		if err != nil {
+			return nil, err
+		}
+		return nil, &ToolError{fmt.Errorf("user declined to delete the file: `%s`", msg)}
 	}
 
 	if !stat.IsDir() || !req.Recursive {

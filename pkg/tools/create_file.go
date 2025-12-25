@@ -2,10 +2,11 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/manifoldco/promptui"
 )
 
 type writeFileRequest struct {
@@ -34,7 +35,11 @@ func (ft *FileTools) writeFile(ctx context.Context, req writeFileRequest) (newCo
 		}
 	} else if result != confirmationYes {
 		logger.Info("User rejected to add the file")
-		return "", &ToolError{errors.New("user rejected to write to the file")}
+		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
+		if err != nil {
+			return "", err
+		}
+		return "", &ToolError{fmt.Errorf("user rejected to write to the file: `%s`", msg)}
 	}
 
 	dirname := filepath.Dir(filename)

@@ -2,8 +2,9 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
+
+	"github.com/manifoldco/promptui"
 )
 
 type createDirRequest struct {
@@ -25,7 +26,11 @@ func (ft *FileTools) createDir(ctx context.Context, req createDirRequest) (*crea
 	}
 	if answer != confirmationYes {
 		logger.Error("User declined to create the directory")
-		return nil, &ToolError{errors.New("user declined to create the directory")}
+		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
+		if err != nil {
+			return nil, err
+		}
+		return nil, &ToolError{fmt.Errorf("user declined with `%s`", msg)}
 	}
 
 	root, err := ft.getRoot()

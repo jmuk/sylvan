@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/andreyvit/diff"
+	"github.com/manifoldco/promptui"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -114,7 +115,11 @@ func (ft *FileTools) modifyFile(ctx context.Context, req modifyFileRequest) (str
 		withNewContent = true
 	} else if answer != confirmationYes {
 		logger.Error("User declined")
-		return "", &ToolError{errors.New("user declined to accept the change")}
+		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
+		if err != nil {
+			return "", err
+		}
+		return "", &ToolError{fmt.Errorf("user declined to accept the change: `%s`", msg)}
 	}
 
 	if err := root.WriteFile(req.Filename, []byte(strData), 0644); err != nil {
