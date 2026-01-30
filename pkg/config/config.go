@@ -8,18 +8,28 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// Config keeps the configuration.
 type Config struct {
-	Backends    []map[string]any `toml:"backends"`
-	MCP         []MCPConfig      `toml:"mcp"`
-	BackendName string           `toml:"backend_name"`
-	ModelName   string           `toml:"model_name"`
-	LogLevel    slog.Level       `toml:"log_level"`
+	// Backends is the list of the backend / models.
+	// The actual format of each item is defined in the backend's
+	// config struct.
+	Backends []map[string]any `toml:"backends"`
+	// MCP is the list of MCPs the agent can interact with.
+	MCP []MCPConfig `toml:"mcp"`
+	// The name of the backend to be used.
+	BackendName string `toml:"backend_name"`
+	// The name of the LLM to be used.
+	ModelName string `toml:"model_name"`
+	// The output log level.
+	LogLevel slog.Level `toml:"log_level"`
 }
 
+// ConfigFile returns the path of the config file.
 func ConfigFile(basePath string) string {
 	return filepath.Join(basePath, "config.toml")
 }
 
+// DefaultConfigFile returns the config file for the user.
 func DefaultConfigFile() (string, error) {
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
@@ -28,6 +38,8 @@ func DefaultConfigFile() (string, error) {
 	return ConfigFile(filepath.Join(userConfigDir, "sylvan")), nil
 }
 
+// DefaultConfig returns the default config when no config is set.
+// TODO: add a startup wizard instead of this.
 func DefaultConfig() (*Config, error) {
 	return &Config{
 		Backends:    []map[string]any{},
@@ -50,6 +62,7 @@ func loadConfigFile(configFile string, config *Config) error {
 	return err
 }
 
+// LoadConfigFile reads a file and load it into the Config struct.
 func LoadConfigFile(configFile string) (*Config, error) {
 	config := &Config{}
 	if err := loadConfigFile(configFile, config); err != nil {
@@ -58,6 +71,8 @@ func LoadConfigFile(configFile string) (*Config, error) {
 	return config, nil
 }
 
+// LoadConfigFiles loads the given config files in the order
+// and merges the result.
 func LoadConfigFiles(paths ...string) (*Config, error) {
 	// First, load the default config.
 	defaultPath, err := DefaultConfigFile()
@@ -86,6 +101,7 @@ func LoadConfigFiles(paths ...string) (*Config, error) {
 	return config, nil
 }
 
+// EditConfig modifies the content of the config specified in the file.
 func EditConfig(configFile string, edit func(c *Config) (*Config, error)) error {
 	loadedConfig := &Config{}
 	if _, err := toml.DecodeFile(configFile, loadedConfig); err != nil {
