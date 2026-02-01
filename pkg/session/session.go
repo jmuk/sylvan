@@ -1,3 +1,4 @@
+// package session provides the session management of the chat.
 package session
 
 import (
@@ -50,6 +51,7 @@ func (h *logger) Close() error {
 	return h.f.Close()
 }
 
+// Session is a session of a chat use.
 type Session struct {
 	meta        sessionMeta
 	sessionPath string
@@ -64,15 +66,18 @@ type sessionKeyT struct{}
 
 var sessionKey = sessionKeyT{}
 
+// With returns a new context with storing the session in it.
 func (s *Session) With(ctx context.Context) context.Context {
 	return context.WithValue(ctx, sessionKey, s)
 }
 
+// FromContext returns the session in the context.
 func FromContext(ctx context.Context) (*Session, bool) {
 	s, ok := ctx.Value(sessionKey).(*Session)
 	return s, ok
 }
 
+// LoggerFromContext returns a new slog.Logger from the context.
 func LoggerFromContext(ctx context.Context, name string) (*slog.Logger, error) {
 	s, ok := FromContext(ctx)
 	if !ok {
@@ -81,10 +86,12 @@ func LoggerFromContext(ctx context.Context, name string) (*slog.Logger, error) {
 	return s.GetLogger(name)
 }
 
+// ID returns the ID of the session.
 func (s *Session) ID() string {
 	return s.meta.SessionID
 }
 
+// Timestamp returns the timestamp when the session is created (started).
 func (s *Session) Timestamp() time.Time {
 	return s.meta.Timestamp
 }
@@ -112,6 +119,7 @@ func (s *Session) updateSessionsFile(workingDir string) error {
 	return os.WriteFile(sessionsFile, []byte(strings.Join(lines, "\n")), 0644)
 }
 
+// Init initializes the session.
 func (s *Session) Init() error {
 	if s.initialized {
 		return nil
@@ -152,6 +160,7 @@ func (s *Session) Init() error {
 	return nil
 }
 
+// HistoryFile returns the path of the chat history in the session.
 func (s *Session) HistoryFile() string {
 	return filepath.Join(s.sessionPath, "history.json")
 }
@@ -160,6 +169,10 @@ func (s *Session) logPath() string {
 	return filepath.Join(s.sessionPath, "logs")
 }
 
+// GetLogFile returns the io.Writer to write to the log text.
+//
+// Typically caller uses slog.Logger for log messages, but certain
+// interfaces will require io.Writer for logging. This is for such interfaces.
 func (s *Session) GetLogFile(filename string) (io.Writer, error) {
 	if f, ok := s.files[filename]; ok {
 		return f, nil
@@ -179,6 +192,7 @@ func (s *Session) GetLogFile(filename string) (io.Writer, error) {
 	return f, nil
 }
 
+// LoadConfig loads the config data in the session.
 func (s *Session) LoadConfig() (*config.Config, error) {
 	var paths []string
 	if len(s.meta.WorkingDir) > 0 {
@@ -192,6 +206,7 @@ func (s *Session) LoadConfig() (*config.Config, error) {
 	return config.LoadConfigFiles(paths...)
 }
 
+// GetLogger returns a new logger stored in the session.
 func (s *Session) GetLogger(name string) (*slog.Logger, error) {
 	l, ok := s.loggers[name]
 	if ok {
@@ -217,6 +232,7 @@ func (s *Session) GetLogger(name string) (*slog.Logger, error) {
 	return l.l, nil
 }
 
+// Close closes all resources opened in the session (e.g. log files).
 func (s *Session) Close() error {
 	if !s.initialized {
 		return nil
@@ -251,6 +267,7 @@ func getWorkingDir(cacheDir, p string) string {
 	return filepath.Join(cacheDir, "paths", hhex)
 }
 
+// ListSessions returns the list of the sessions tied to the directory.
 func ListSessions(cwd string) ([]*Session, error) {
 	cacheDir, err := getCacheBase()
 	if err != nil {
@@ -287,6 +304,7 @@ func ListSessions(cwd string) ([]*Session, error) {
 	return results, nil
 }
 
+// NewFromID loads the session with the given session ID.
 func NewFromID(sessionID string) (*Session, error) {
 	cacheDir, err := getCacheBase()
 	if err != nil {
@@ -323,6 +341,7 @@ func newFromID(sessionID, cacheDir string) (*Session, error) {
 	}, nil
 }
 
+// New creates a new session.
 func New(cwd string) (*Session, error) {
 	now := time.Now()
 	cacheDir, err := getCacheBase()
