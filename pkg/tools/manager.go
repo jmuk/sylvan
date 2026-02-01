@@ -7,11 +7,15 @@ import (
 	"github.com/jmuk/sylvan/pkg/config"
 )
 
+// Manager manages the multiple tools.
 type Manager interface {
+	// ToolDefs returns the list of tools it can support.
 	ToolDefs(ctx context.Context) ([]ToolDefinition, error)
+	// Close closes the session.
 	Close() error
 }
 
+// NewManagers creates the list of the managers from the config.
 func NewManagers(cwd string, c *config.Config) []Manager {
 	mcpManagers := map[string]Manager{}
 	for _, mcpc := range c.MCP {

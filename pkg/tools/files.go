@@ -43,6 +43,7 @@ func (ft *FileTools) Close() error {
 	return root.Close()
 }
 
+// ToolDefs implements Manager interface.
 func (ft *FileTools) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
 	return []ToolDefinition{
 		&toolDefinition[readFileRequest, *readFileResponse]{

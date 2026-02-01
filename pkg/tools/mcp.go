@@ -66,6 +66,7 @@ func (hsf *httpFactory) newTransport() mcp.Transport {
 	return transport
 }
 
+// MCPTool is a tool provided by MCP.
 type MCPTool struct {
 	name    string
 	client  *mcp.Client
@@ -93,6 +94,7 @@ func newMCPTool() *MCPTool {
 	return mt
 }
 
+// NewCommandMCP creates a new MCPTool using the command-line.
 func NewCommandMCP(name string, command []string) *MCPTool {
 	mt := newMCPTool()
 	mt.factory = &commandFactory{
@@ -101,6 +103,7 @@ func NewCommandMCP(name string, command []string) *MCPTool {
 	return mt
 }
 
+// NewHTTPMCP creates a new MCPTool with the given HTTP endpoint.
 func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
 	var h http.Header
 	if len(headers) > 0 {
@@ -117,6 +120,7 @@ func NewHTTPMCP(name, endpoint string, headers map[string]string) *MCPTool {
 	return mt
 }
 
+// NewMCP creates a new MCPTool based on the config.
 func NewMCP(cfg config.MCPConfig) *MCPTool {
 	if cfg.Endpoint != "" {
 		name := cfg.Name
@@ -283,6 +287,7 @@ func (mt *MCPTool) process(ctx context.Context, name string, in map[string]any) 
 	return result.StructuredContent, ps, nil
 }
 
+// ToolDefs creates the list of ToolDefinitions for the MCPTool.
 func (mt *MCPTool) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
 	session, err := mt.newSession(ctx)
 	if err != nil {

@@ -25,10 +25,15 @@ func (e *ToolError) Unwrap() error {
 	return e.err
 }
 
+// ToolDefinition is a definition of a tool.
 type ToolDefinition interface {
+	// The name of the tool.
 	Name() string
+	// The description of the tool.
 	Description() string
+	// Schema of the request object.
 	RequestSchema() *jsonschema.Schema
+	// Schema of the response object.
 	ResponseSchema() *jsonschema.Schema
 	process(ctx context.Context, in map[string]any) (any, []*parts.Part, error)
 }

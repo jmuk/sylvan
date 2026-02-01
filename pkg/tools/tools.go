@@ -1,3 +1,4 @@
+// package tools provides the tools used by LLMs.
 package tools
 
 import (
@@ -23,10 +24,13 @@ func getLogger(ctx context.Context) *slog.Logger {
 	return logger.(*slog.Logger)
 }
 
+// ToolRunner keeps the list of the tools and accepts the tool
+// requests and conducts their invocations.
 type ToolRunner struct {
 	defsMap map[string]ToolDefinition
 }
 
+// NewToolRunner creates a new ToolRunner instance.
 func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 	m := make(map[string]ToolDefinition, len(defs))
 	for _, d := range defs {
@@ -38,6 +42,7 @@ func NewToolRunner(defs []ToolDefinition) (*ToolRunner, error) {
 	return &ToolRunner{defsMap: m}, nil
 }
 
+// Run runs a new tool with the given name and the input data.
 func (r *ToolRunner) Run(ctx context.Context, name string, in map[string]any) (any, []*parts.Part, error) {
 	p, ok := r.defsMap[name]
 	if !ok {

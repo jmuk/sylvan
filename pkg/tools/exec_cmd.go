@@ -76,9 +76,11 @@ func (b *bufferWithViewer) String() string {
 	return b.buffer.String()
 }
 
+// ExecTool is a manager of command execution tools.
 type ExecTool struct {
 }
 
+// NewExecTool creates a new command execution tool.
 func NewExecTool() *ExecTool {
 	return &ExecTool{}
 }
@@ -149,10 +151,12 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*e
 	}, nil
 }
 
+// Close implements Manager interface.
 func (et *ExecTool) Close() error {
 	return nil
 }
 
+// ToolDefs implements Manager interface.
 func (et *ExecTool) ToolDefs(ctx context.Context) ([]ToolDefinition, error) {
 	return []ToolDefinition{
 		&toolDefinition[execCommandRequest, *execCommandResponse]{
