@@ -1,3 +1,7 @@
+// package config keeps the configuration data.
+//
+// It provides the basic configuration data structure and its
+// file storing and loading logic.
 package config
 
 import (
