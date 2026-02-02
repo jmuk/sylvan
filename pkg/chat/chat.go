@@ -1,3 +1,4 @@
+// package chat provides the chat UI and the event loop.
 package chat
 
 import (
@@ -67,12 +68,14 @@ func (cs *chatSession) With(ctx context.Context) context.Context {
 	return cs.s.With(ctx)
 }
 
+// Chat keeps the current chat session.
 type Chat struct {
 	rl  *readline.Instance
 	cs  *chatSession
 	cwd string
 }
 
+// New creates a new Chat.
 func New(ctx context.Context, cwd string) (*Chat, error) {
 	s, err := session.New(cwd)
 	if err != nil {
@@ -93,6 +96,7 @@ func New(ctx context.Context, cwd string) (*Chat, error) {
 	}, nil
 }
 
+// Close cleans up the states of the chat.
 func (c *Chat) Close() error {
 	if c.cs != nil {
 		return c.cs.Close()
@@ -100,6 +104,7 @@ func (c *Chat) Close() error {
 	return nil
 }
 
+// RunLoop starts a run loop of REPL.
 func (c *Chat) RunLoop(ctx context.Context) error {
 	ctx = c.cs.With(ctx)
 	for {
@@ -147,6 +152,7 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 	}
 }
 
+// HandleMessage handles a input message, sends to an agent, processes the response.
 func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 	l, err := c.cs.s.GetLogger("chat")
 	if err != nil {

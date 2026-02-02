@@ -15,17 +15,28 @@ import (
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
+// BackendType defines the list of the backends.
 type BackendType string
 
 const (
-	BackendTypeGemini     BackendType = "gemini"
-	BackendTypeClaude     BackendType = "claude"
-	BackendTypeOpenAI     BackendType = "openai"
+	// Gemini.
+	BackendTypeGemini BackendType = "gemini"
+
+	// Claude.
+	BackendTypeClaude BackendType = "claude"
+
+	// OpenAI responses API.
+	BackendTypeOpenAI BackendType = "openai"
+
+	// OpenAI completion API.
 	BackendTypeOpenAIComp BackendType = "openai_comp"
 )
 
+// BackendConfig defines the interface common for the backend.
 type BackendConfig interface {
+	// The name of the config.
 	Name() string
+	// Creates a new agent.
 	// TODO: add common interface for chat
 	NewAgent(
 		ctx context.Context,
@@ -33,6 +44,7 @@ type BackendConfig interface {
 		systemPrompt string,
 		tools []tools.ToolDefinition,
 	) (agent.Agent, error)
+	// Returns the list of models in the backend.
 	Models(ctx context.Context) ([]string, error)
 }
 

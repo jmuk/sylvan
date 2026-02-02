@@ -23,6 +23,7 @@ type modelResponse struct {
 	LastID  string      `json:"last_id"`
 }
 
+// Models implements chat.BackendConfig interface.
 func (c *Config) Models(ctx context.Context) ([]string, error) {
 	logger, err := session.LoggerFromContext(ctx, "claude")
 	if err != nil {

@@ -10,15 +10,28 @@ import (
 	"google.golang.org/genai"
 )
 
+// Config is the configuration data of Gemini Agent.
 type Config struct {
-	ConfigName      string `toml:"name"`
-	APIKey          string `toml:"api_key,omitempty"`
-	Backend         string `toml:"backend,omitempty"`
-	Project         string `toml:"project,omitempty"`
-	Location        string `toml:"location,omitempty"`
-	excludeThoughts bool   `toml:"excludeThoughts,omitempty"`
+	// The name of the config.
+	ConfigName string `toml:"name"`
+
+	// The API key.
+	APIKey string `toml:"api_key,omitempty"`
+
+	// The backend.
+	Backend string `toml:"backend,omitempty"`
+
+	// The GCP project.
+	Project string `toml:"project,omitempty"`
+
+	// The GCP location.
+	Location string `toml:"location,omitempty"`
+
+	// Whether exclude the thoughts or not.
+	ExcludeThoughts bool `toml:"excludeThoughts,omitempty"`
 }
 
+// Name implements chat.BackendConfig interface.
 func (gc *Config) Name() string {
 	return gc.ConfigName
 }
@@ -38,15 +51,17 @@ func (gc *Config) clientConfig() *genai.ClientConfig {
 	}
 }
 
+// NewAgent implements chat.BackendConfig interface.
 func (gc *Config) NewAgent(
 	ctx context.Context,
 	modelName string,
 	systemPrompt string,
 	toolDefs []tools.ToolDefinition,
 ) (agent.Agent, error) {
-	return New(ctx, modelName, gc.clientConfig(), systemPrompt, toolDefs, !gc.excludeThoughts)
+	return New(ctx, modelName, gc.clientConfig(), systemPrompt, toolDefs, !gc.ExcludeThoughts)
 }
 
+// Models implements chat.BackendConfig interface.
 func (gc *Config) Models(ctx context.Context) ([]string, error) {
 	l, err := session.LoggerFromContext(ctx, "gemini")
 	if err != nil {

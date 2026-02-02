@@ -1,3 +1,4 @@
+// package gemini provides the agent.Agent implementation with Gemini.
 package gemini
 
 import (
@@ -28,6 +29,7 @@ func toSchema(s *jsonschema.Schema) (*genai.Schema, error) {
 	return decoded, nil
 }
 
+// Agent is an agent implementation using Gemini.
 type Agent struct {
 	chat        *genai.Chat
 	historyFile string
@@ -84,6 +86,7 @@ func partToFunctionResponse(p *parts.Part) (*genai.FunctionResponsePart, bool) {
 	return nil, false
 }
 
+// SendMessageStream implements agent.Agent interface.
 func (g *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
 	return func(yield func(*parts.Part, error) bool) {
 		inputParts := make([]*genai.Part, 0, len(ps))
@@ -193,6 +196,7 @@ func loadHistory(historyFile string) ([]*genai.Content, error) {
 	return contents, nil
 }
 
+// New creates a new Agent.
 func New(
 	ctx context.Context,
 	modelName string,

@@ -1,3 +1,4 @@
+// package claude implements the client to Claude API.
 package claude
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
+// Agent is an implementation of agent.Agent using Claude.
 type Agent struct {
 	history      []message
 	modelName    string
@@ -27,6 +29,7 @@ type Agent struct {
 	logger      *slog.Logger
 }
 
+// SendMessageStream implements agent.Agent interface.
 func (a *Agent) SendMessageStream(ctx context.Context, messages []parts.Part) iter.Seq2[*parts.Part, error] {
 	return func(yield func(*parts.Part, error) bool) {
 		histSize := len(a.history)
@@ -53,6 +56,7 @@ func (a *Agent) SendMessageStream(ctx context.Context, messages []parts.Part) it
 	}
 }
 
+// New creates a new Claude agent.
 func New(ctx context.Context, config *Config, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (*Agent, error) {
 	agent := &Agent{
 		modelName:    modelName,

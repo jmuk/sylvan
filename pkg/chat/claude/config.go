@@ -10,15 +10,28 @@ import (
 	"github.com/jmuk/sylvan/pkg/tools"
 )
 
+// Config is the configuration for the claude client.
 type Config struct {
-	ConfigName       string `toml:"name"`
-	BaseURL          string `toml:"base_url"`
-	APIKey           string `toml:"api_key"`
-	APIKeyFromEnv    string `toml:"api_key_env"`
+	// The name of the config.
+	ConfigName string `toml:"name"`
+
+	// The URL to connect to.
+	BaseURL string `toml:"base_url"`
+
+	// The API key.
+	APIKey string `toml:"api_key"`
+
+	// The name of the environment variable that stores the API key.
+	APIKeyFromEnv string `toml:"api_key_env"`
+
+	// Anthropic version.
 	AnthropicVersion string `toml:"anthropic_version"`
-	MaxTokens        int    `toml:"max_tokens"`
+
+	// Max number of tokens.
+	MaxTokens int `toml:"max_tokens"`
 }
 
+// Name implements chat.BackendConfig interface.
 func (c *Config) Name() string {
 	return c.ConfigName
 }
@@ -37,10 +50,12 @@ func (c *Config) apiKey() (string, error) {
 	return c.APIKey, nil
 }
 
+// NewAgent implements chat.BackendConfig interface.
 func (c *Config) NewAgent(ctx context.Context, modelName string, systemPrompt string, toolDefs []tools.ToolDefinition) (agent.Agent, error) {
 	return New(ctx, c, modelName, systemPrompt, toolDefs)
 }
 
+// ParseConfig parses the map data.
 func ParseConfig(data []byte) (*Config, error) {
 	config := *DefaultConfig()
 	if err := toml.Unmarshal(data, &config); err != nil {
@@ -49,6 +64,7 @@ func ParseConfig(data []byte) (*Config, error) {
 	return &config, nil
 }
 
+// DefaultConfig creates a default config.
 func DefaultConfig() *Config {
 	return &Config{
 		BaseURL:          "https://api.anthropic.com/",

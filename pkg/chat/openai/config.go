@@ -16,13 +16,22 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
+// Config is the configurataion for OpenAI API.
 type Config struct {
-	ConfigName    string `toml:"name"`
-	BaseURL       string `toml:"base_url"`
-	APIKey        string `toml:"api_key"`
+	// The name of the config.
+	ConfigName string `toml:"name"`
+
+	// The base URL for the API calls.
+	BaseURL string `toml:"base_url"`
+
+	// The API key.
+	APIKey string `toml:"api_key"`
+
+	// The environment variable that stores the API key.
 	APIKeyFromEnv string `toml:"api_key_env"`
 }
 
+// Name implements chat.BackendConfig interface.
 func (c *Config) Name() string {
 	return c.ConfigName
 }
@@ -60,6 +69,7 @@ func parseHistoryFile(filename string) (param.Opt[string], error) {
 	return param.NewOpt(lines[len(lines)-1]), nil
 }
 
+// GetOpts returns the list of options.
 func (c *Config) GetOpts() ([]option.RequestOption, error) {
 	var opts []option.RequestOption
 	if c.BaseURL != "" {
@@ -77,6 +87,7 @@ func (c *Config) GetOpts() ([]option.RequestOption, error) {
 	return opts, nil
 }
 
+// NewAgent implements chat.BackendConfig interface.
 func (c *Config) NewAgent(
 	ctx context.Context,
 	modelName string,
@@ -117,6 +128,7 @@ func (c *Config) NewAgent(
 	}, nil
 }
 
+// Models implements chat.BackendConfig interface.
 func (c *Config) Models(ctx context.Context) ([]string, error) {
 	logger, err := session.LoggerFromContext(ctx, "openai")
 	if err != nil {

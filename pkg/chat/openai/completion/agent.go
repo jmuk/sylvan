@@ -1,3 +1,4 @@
+// package completion implements agent using OpenAI completion API.
 package completion
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
+// Agent is an implementation of agent using OpenAI completion API.
 type Agent struct {
 	client       openai.ChatCompletionService
 	modelName    string
@@ -25,6 +27,7 @@ func (a *Agent) updateHistory() error {
 	return nil
 }
 
+// SendMessageStream implements agent.Agent interface.
 func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
 	return func(yield func(*parts.Part, error) bool) {
 		logger := slog.New(slog.DiscardHandler)

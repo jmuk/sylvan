@@ -1,3 +1,4 @@
+// package openai implements Agent Using OpenAI responses API.
 package openai
 
 import (
@@ -13,6 +14,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 )
 
+// Agent is an implementation of agent using OpenAI responses API.
 type Agent struct {
 	client      responses.ResponseService
 	historyFile string
@@ -45,6 +47,7 @@ func (a *Agent) updateHistory(responseID string) error {
 	return err
 }
 
+// SendMessageStream implements agent.Agent interface.
 func (a *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq2[*parts.Part, error] {
 	return func(yield func(*parts.Part, error) bool) {
 		logger := slog.New(slog.DiscardHandler)

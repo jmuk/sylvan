@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 )
 
+// Config is the configuration.
 type Config sylvanopenai.Config
 
 func convertToolDef(d tools.ToolDefinition) (openai.ChatCompletionToolUnionParam, error) {
@@ -50,10 +51,12 @@ func convertToolDef(d tools.ToolDefinition) (openai.ChatCompletionToolUnionParam
 // 	return param.NewOpt(lines[len(lines)-1]), nil
 // }
 
+// Name implements chat.BackendConfig interface.
 func (c *Config) Name() string {
 	return c.ConfigName
 }
 
+// NewAgent implements chat.BackendConfig interface.
 func (c *Config) NewAgent(
 	ctx context.Context,
 	modelName string,
@@ -88,6 +91,7 @@ func (c *Config) NewAgent(
 	}, nil
 }
 
+// Models implements chat.BackendConfig interface.
 func (c *Config) Models(ctx context.Context) ([]string, error) {
 	logger, err := session.LoggerFromContext(ctx, "openai")
 	if err != nil {
