@@ -1,6 +1,9 @@
 package chat
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -58,6 +61,52 @@ func (cc *commandCompleter) complete(prefix string) []string {
 	return results
 }
 
+type fileCompleter struct {
+	root *os.Root
+}
+
+func (fc *fileCompleter) triggerChar(line []rune, pos int) int {
+	i := pos - 1
+	for ; i >= 0; i-- {
+		r := line[i]
+		if r == '@' {
+			if i == 0 || line[i-1] != '\\' {
+				return i
+			}
+		} else if unicode.IsSpace(r) {
+			if i == 0 || line[i-1] != '\\' {
+				return -1
+			}
+		} else if !unicode.IsGraphic(r) {
+			return -1
+		}
+	}
+	return -1
+}
+
+func (fc *fileCompleter) complete(prefix string) []string {
+	// the prefix should start with '@'
+	dir, file := filepath.Split(prefix[1:])
+	if dir == "" {
+		dir = "."
+	}
+	for strings.HasSuffix(dir, "/") {
+		dir = dir[:len(dir)-1]
+	}
+	ents, err := fs.ReadDir(fc.root.FS(), dir)
+	if err != nil {
+		return nil
+	}
+	var results []string
+	for _, ent := range ents {
+		name := ent.Name()
+		if strings.HasPrefix(name, file) {
+			results = append(results, name[len(file):])
+		}
+	}
+	return results
+}
+
 type combinedCompleter struct {
 	comps []completer
 }
@@ -78,10 +127,15 @@ func (c *combinedCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 	return nil, 0
 }
 
-func newCombinedCompleter() *combinedCompleter {
+func newCombinedCompleter(cwd string) (*combinedCompleter, error) {
+	root, err := os.OpenRoot(cwd)
+	if err != nil {
+		return nil, err
+	}
 	return &combinedCompleter{
 		comps: []completer{
 			&commandCompleter{},
+			&fileCompleter{root},
 		},
-	}
+	}, nil
 }

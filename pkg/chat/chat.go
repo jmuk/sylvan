@@ -81,10 +81,14 @@ func New(ctx context.Context, cwd string) (*Chat, error) {
 	if err != nil {
 		return nil, err
 	}
+	completer, err := newCombinedCompleter(cwd)
+	if err != nil {
+		return nil, err
+	}
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       "> ",
 		HistoryLimit: -1,
-		AutoComplete: newCombinedCompleter(),
+		AutoComplete: completer,
 	})
 	if err != nil {
 		return nil, err
