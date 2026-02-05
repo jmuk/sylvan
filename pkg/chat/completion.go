@@ -127,15 +127,11 @@ func (c *combinedCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 	return nil, 0
 }
 
-func newCombinedCompleter(cwd string) (*combinedCompleter, error) {
-	root, err := os.OpenRoot(cwd)
-	if err != nil {
-		return nil, err
-	}
+func newCombinedCompleter(root *os.Root) *combinedCompleter {
 	return &combinedCompleter{
 		comps: []completer{
 			&commandCompleter{},
 			&fileCompleter{root},
 		},
-	}, nil
+	}
 }

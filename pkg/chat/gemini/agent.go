@@ -94,8 +94,7 @@ func (g *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 			p := &genai.Part{}
 			if part.Text != "" {
 				p.Text = part.Text
-			}
-			if fr := part.FunctionResponse; fr != nil {
+			} else if fr := part.FunctionResponse; fr != nil {
 				resp := &genai.FunctionResponse{
 					ID:       fr.ID,
 					Name:     fr.Name,
@@ -128,6 +127,10 @@ func (g *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 					}
 				}
 				p.FunctionResponse = resp
+			} else if file := part.File; file != nil {
+				p.Text = fmt.Sprintf("Here is the file content of %s:\n%s", file.Filename, string(file.Data))
+			} else {
+				continue
 			}
 			inputParts = append(inputParts, p)
 		}

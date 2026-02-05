@@ -5,8 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/chzyer/readline"
 	"github.com/jmuk/sylvan/pkg/chat/agent"
@@ -70,9 +73,10 @@ func (cs *chatSession) With(ctx context.Context) context.Context {
 
 // Chat keeps the current chat session.
 type Chat struct {
-	rl  *readline.Instance
-	cs  *chatSession
-	cwd string
+	rl   *readline.Instance
+	cs   *chatSession
+	cwd  string
+	root *os.Root
 }
 
 // New creates a new Chat.
@@ -81,10 +85,11 @@ func New(ctx context.Context, cwd string) (*Chat, error) {
 	if err != nil {
 		return nil, err
 	}
-	completer, err := newCombinedCompleter(cwd)
+	root, err := os.OpenRoot(cwd)
 	if err != nil {
 		return nil, err
 	}
+	completer := newCombinedCompleter(root)
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:       "> ",
 		HistoryLimit: -1,
@@ -94,9 +99,10 @@ func New(ctx context.Context, cwd string) (*Chat, error) {
 		return nil, err
 	}
 	return &Chat{
-		rl:  rl,
-		cs:  &chatSession{s: s},
-		cwd: cwd,
+		rl:   rl,
+		cs:   &chatSession{s: s},
+		cwd:  cwd,
+		root: root,
 	}, nil
 }
 
@@ -156,13 +162,100 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 	}
 }
 
+// parseInput parses the input text and hopefully find the pattern of
+// file names prefixed by the '@'.
+// Note:
+//   - '\@' isn't the pattern for the input.
+//   - '@' within the backquotes (`@foo` or ```@foo```) don't count.
+func (c *Chat) parseInput(input string) ([]string, error) {
+	quote := ""
+	atPos := -1
+	var files []string
+	var cand []byte
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if ch == '\\' && len(quote) <= 1 {
+			// Skip a character after the backslash.
+			i++
+			continue
+		}
+		if len(quote) > 0 && strings.HasPrefix(input[i:], quote) {
+			i += len(quote) - 1
+			quote = ""
+			continue
+		}
+		if atPos < 0 {
+			if ch == '`' {
+				if strings.HasPrefix(input[i:], "```") {
+					quote = "```"
+					i += 2
+				} else {
+					quote = "`"
+				}
+				continue
+			}
+			if ch == '@' {
+				atPos = i
+			}
+		} else {
+			if unicode.IsSpace(rune(ch)) {
+				candStr := string(cand)
+				if fi, err := c.root.Stat(candStr); err != nil {
+					// Safe to ignore not-found error, that turns out not a file.
+					if !os.IsNotExist(err) {
+						return nil, err
+					}
+				} else if fi.Mode().IsRegular() {
+					files = append(files, candStr)
+				}
+				atPos = -1
+				cand = nil
+			} else {
+				cand = append(cand, ch)
+			}
+		}
+	}
+	if atPos >= 0 {
+		candStr := string(cand)
+		if fi, err := c.root.Stat(candStr); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+		} else if fi.Mode().IsRegular() {
+			files = append(files, candStr)
+		}
+	}
+	return files, nil
+}
+
 // HandleMessage handles a input message, sends to an agent, processes the response.
 func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 	l, err := c.cs.s.GetLogger("chat")
 	if err != nil {
 		return err
 	}
+
+	files, err := c.parseInput(input)
+	if err != nil {
+		return err
+	}
 	msgs := []parts.Part{{Text: input}}
+	for _, file := range files {
+		content, err := c.root.ReadFile(file)
+		if err != nil {
+			if !os.IsNotExist(err) && !errors.Is(err, fs.ErrPermission) {
+				return err
+			}
+		} else {
+			msgs = append(msgs, parts.Part{
+				File: &parts.Blob{
+					Data:     content,
+					MimeType: "text/plain",
+					Filename: file,
+				},
+			})
+		}
+	}
 	for {
 		printed := false
 		var nextMsgs []parts.Part
