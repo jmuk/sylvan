@@ -16,6 +16,7 @@ const (
 	contentTypeToolResult contentType = "tool_result"
 	contentTypeText       contentType = "text"
 	contentTypeImage      contentType = "image"
+	contentTypeDocument   contentType = "document"
 )
 
 type thinkingContent struct {
@@ -48,6 +49,45 @@ func toImageContent(b *parts.Blob) *imageContent {
 		MediaType: b.MimeType,
 		Data:      base64.StdEncoding.EncodeToString(b.Data),
 		Type:      contentTypeImage,
+	}
+}
+
+type documentSourceType string
+
+const (
+	documentSourceTypeText    documentSourceType = "text"
+	documentSourceTypeContent documentSourceType = "content"
+)
+
+type documentSource struct {
+	Data      string             `json:"data"`
+	MediaType string             `json:"media_type"`
+	Type      documentSourceType `json:"type"`
+}
+
+type cacheControlType string
+
+const cacheControlTypeEphemeral cacheControlType = "ephemeral"
+
+type documentCacheControl struct {
+	Type cacheControlType `json:"type"`
+	TTL  string           `json:"ttl,omitempty"`
+}
+
+type documentContent struct {
+	Source       documentSource        `json:"source"`
+	Type         contentType           `json:"type"`
+	CacheControl *documentCacheControl `json:"cache_control,omitempty"`
+}
+
+func toDocumentContent(b *parts.Blob) *documentContent {
+	return &documentContent{
+		Source: documentSource{
+			Data:      string(b.Data),
+			MediaType: b.MimeType,
+			Type:      documentSourceTypeContent,
+		},
+		Type: contentTypeDocument,
 	}
 }
 
@@ -130,6 +170,8 @@ func (m message) toInput() (inputMessage, error) {
 			}
 		}
 		msg.Content = []toolResultContent{c}
+	} else if f := m.Part.File; f != nil {
+		msg.Content = toDocumentContent(f)
 	} else {
 		return inputMessage{}, fmt.Errorf("unknown type of part: %v", m.Part)
 	}
