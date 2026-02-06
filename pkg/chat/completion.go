@@ -20,6 +20,7 @@ var knownCommands = []string{
 	"quit",
 	"session",
 	"mcp",
+	"backends",
 	"models",
 	"commands",
 	"help",

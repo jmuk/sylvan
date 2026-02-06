@@ -14,6 +14,7 @@ const (
 	commandList
 	commandMCP
 	commandModels
+	commandBackends
 )
 
 func (c *Chat) parseCommand(line string) (command, []string) {
@@ -35,6 +36,8 @@ func (c *Chat) parseCommand(line string) (command, []string) {
 		return commandMCP, words[1:]
 	case "models":
 		return commandModels, words[1:]
+	case "backends":
+		return commandBackends, words[1:]
 	case "commands", "help", "list-commands":
 		return commandList, words[1:]
 	default:

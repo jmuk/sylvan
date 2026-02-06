@@ -151,6 +151,11 @@ func (c *Chat) RunLoop(ctx context.Context) error {
 				return err
 			}
 			continue
+		case commandBackends:
+			if err := c.handleBackendsCommand(ctx, args); err != nil {
+				return err
+			}
+			continue
 		}
 
 		if err := c.cs.maybeInit(ctx, c.cwd); err != nil {

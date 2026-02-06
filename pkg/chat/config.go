@@ -100,6 +100,19 @@ func getBackend(c *config.Config) (BackendConfig, error) {
 	return nil, fmt.Errorf("backend %s not found", c.BackendName)
 }
 
+func getBackendNames(c *config.Config) ([]string, error) {
+	names := make([]string, 0, len(c.Backends))
+	for _, backend := range c.Backends {
+		cfg, err := backendFrom(backend)
+		if err != nil {
+			log.Printf("Failed to parse model config: %s", err)
+			continue
+		}
+		names = append(names, cfg.Name())
+	}
+	return names, nil
+}
+
 func newAgent(
 	ctx context.Context,
 	c *config.Config,
