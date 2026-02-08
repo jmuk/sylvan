@@ -145,7 +145,11 @@ func (m message) toInput() (inputMessage, error) {
 			c.Content = fr.Error.Error()
 		} else {
 			if len(fr.Parts) == 0 {
-				c.Content = fr.Response
+				encoded, err := json.Marshal(fr.Response)
+				if err != nil {
+					return inputMessage{}, err
+				}
+				c.Content = string(encoded)
 			} else {
 				var contents []any
 				if fr.Response != nil {
