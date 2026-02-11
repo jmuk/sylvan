@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -18,14 +19,14 @@ import (
 var commandDefaultTimeout = time.Minute
 
 type execCommandRequest struct {
-	CommandLine string `json:"command_line" jsonschema:"the full command line string; note that this does not evaluate glob patterns"`
+	CommandLine    string `json:"command_line" jsonschema:"the full command line string. This will be executed through shell"`
+	TimeoutSeconds int    `json:"timeout_seconds" jsonschema:"the timeout of the command execution in seconds. The default is 60 seconds"`
 }
 
 type execCommandResponse struct {
-	ReturnCode  int    `json:"return_code" jsonschema:"description=the return code of the command; 0 means successful"`
-	Output      string `json:"output" jsonschema:"description=the standard output of the command"`
-	ErrorOut    string `json:"error_out" jsonschema:"description=the standard error output of the command"`
-	CommandLine string `json:"command_line" jsonschema:"description=the actual commandline to be executed"`
+	ReturnCode int    `json:"return_code" jsonschema:"description=the return code of the command; 0 means successful"`
+	Output     string `json:"output" jsonschema:"description=the standard output of the command"`
+	ErrorOut   string `json:"error_out" jsonschema:"description=the standard error output of the command"`
 }
 
 var whiteSpaces = regexp.MustCompile(`\s+`)
@@ -88,27 +89,25 @@ func NewExecTool() *ExecTool {
 func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*execCommandResponse, error) {
 	logger := getLogger(ctx).With("commandline", req.CommandLine)
 	logger.Debug("Start execution")
-	params := whiteSpaces.Split(req.CommandLine, -1)
-	logger = logger.With("command", params[0])
+	commandLine := req.CommandLine
+	logger = logger.With("command", commandLine)
 
-	fmt.Println("Going to execute the following command:", strings.Join(params, " "))
+	fmt.Println("Going to execute the following command:", commandLine)
 	answer, err := confirm()
 	if err != nil {
 		logger.Error("Failed to obtain the user answer", "error", err)
 		return nil, err
 	}
-	var newCommandline string
 	if answer == confirmationEdit {
 		p := promptui.Prompt{
 			Label:   ">",
 			Default: req.CommandLine,
 		}
-		newCommandline, err = p.Run()
+		commandLine, err = p.Run()
 		if err != nil {
 			logger.Error("Failed to obtain the user answer", "error", err)
 			return nil, err
 		}
-		params = whiteSpaces.Split(newCommandline, -1)
 	} else if answer != confirmationYes {
 		logger.Error("User declined to execute")
 		msg, err := (&promptui.Prompt{Label: "Tell me why"}).Run()
@@ -118,9 +117,13 @@ func (et *ExecTool) execCommand(ctx context.Context, req execCommandRequest) (*e
 		return nil, &ToolError{fmt.Errorf("user declied to execute: `%s`", msg)}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), commandDefaultTimeout)
+	timeout := time.Second * time.Duration(req.TimeoutSeconds)
+	if timeout == 0 {
+		timeout = commandDefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, params[0], params[1:]...)
+	cmd := exec.CommandContext(ctx, os.Getenv("SHELL"), "-c", commandLine)
 	stdout := newBufferWithViewer("", logger)
 	stderr := newBufferWithViewer("error:", logger)
 	defer stdout.Close()
