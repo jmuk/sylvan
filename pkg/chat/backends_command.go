@@ -30,6 +30,9 @@ func (c *Chat) handleBackendsCommand(ctx context.Context, args []string) error {
 	}
 	_, selected, err := sel.Run()
 	if err != nil {
+		if err == promptui.ErrInterrupt {
+			return nil
+		}
 		fmt.Println(err)
 		return err
 	}

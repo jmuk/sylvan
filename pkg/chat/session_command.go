@@ -52,6 +52,9 @@ func (c *Chat) chooseNewSession() (*session.Session, error) {
 	}
 	idx, _, err := sel.Run()
 	if err != nil {
+		if err == promptui.ErrInterrupt {
+			return sessions[cursorPos], nil
+		}
 		return nil, err
 	}
 	if sessions[idx].ID() == c.cs.s.ID() {
