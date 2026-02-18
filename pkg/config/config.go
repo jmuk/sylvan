@@ -26,6 +26,8 @@ type Config struct {
 	ModelName string `toml:"model_name"`
 	// The output log level.
 	LogLevel slog.Level `toml:"log_level"`
+	// Agents file name when specified.
+	AgentsFile string `toml:"agents_file"`
 }
 
 // ConfigFile returns the path of the config file.

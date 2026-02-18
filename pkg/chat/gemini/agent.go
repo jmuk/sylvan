@@ -127,8 +127,6 @@ func (g *Agent) SendMessageStream(ctx context.Context, ps []parts.Part) iter.Seq
 					}
 				}
 				p.FunctionResponse = resp
-			} else if file := part.File; file != nil {
-				p.Text = fmt.Sprintf("Here is the file content of %s:\n%s", file.Filename, string(file.Data))
 			} else {
 				continue
 			}

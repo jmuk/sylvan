@@ -51,7 +51,11 @@ func (cs *chatSession) maybeInit(ctx context.Context, cwd string) error {
 	if err != nil {
 		return err
 	}
-	cs.ag, err = newAgent(ctx, cs.cfg, SystemPrompt, toolDefs)
+	prompt, err := SystemPrompt(cwd, cs.cfg.AgentsFile)
+	if err != nil {
+		return err
+	}
+	cs.ag, err = newAgent(ctx, cs.cfg, prompt, toolDefs)
 	if err != nil {
 		return err
 	}
