@@ -51,11 +51,7 @@ func (cs *chatSession) maybeInit(ctx context.Context, cwd string) error {
 	if err != nil {
 		return err
 	}
-	prompt, err := SystemPrompt(cwd, cs.cfg.AgentsFile)
-	if err != nil {
-		return err
-	}
-	cs.ag, err = newAgent(ctx, cs.cfg, prompt, toolDefs)
+	cs.ag, err = newAgent(ctx, cs.cfg, SystemPrompt, toolDefs)
 	if err != nil {
 		return err
 	}
@@ -77,8 +73,11 @@ func (cs *chatSession) With(ctx context.Context) context.Context {
 
 // Chat keeps the current chat session.
 type Chat struct {
-	rl   *readline.Instance
-	cs   *chatSession
+	rl *readline.Instance
+
+	cs          *chatSession
+	sessionUsed bool
+
 	cwd  string
 	root *os.Root
 }
@@ -103,10 +102,11 @@ func New(ctx context.Context, cwd string) (*Chat, error) {
 		return nil, err
 	}
 	return &Chat{
-		rl:   rl,
-		cs:   &chatSession{s: s},
-		cwd:  cwd,
-		root: root,
+		rl:          rl,
+		cs:          &chatSession{s: s},
+		sessionUsed: false,
+		cwd:         cwd,
+		root:        root,
 	}, nil
 }
 
@@ -248,7 +248,17 @@ func (c *Chat) HandleMessage(ctx context.Context, input string) error {
 	if err != nil {
 		return err
 	}
-	msgs := []parts.Part{{Text: input}}
+	var msgs []parts.Part
+	if !c.sessionUsed {
+		customInstruction, err := getCustomInstruction(c.cwd, c.cs.cfg.AgentsFile)
+		if err != nil {
+			return err
+		}
+		if customInstruction != "" {
+			msgs = append(msgs, parts.Part{Text: fmt.Sprintf("Here attaches the custom instructions for this project: ```%s```", customInstruction)})
+		}
+	}
+	msgs = append(msgs, parts.Part{Text: input})
 	for _, file := range files {
 		content, err := c.root.ReadFile(file)
 		if err != nil {

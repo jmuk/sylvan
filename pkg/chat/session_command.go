@@ -97,6 +97,7 @@ func (c *Chat) handleSessionCommands(args []string) (bool, error) {
 		return false, err
 	}
 	c.cs = &chatSession{s: newSession}
+	c.sessionUsed = false
 	fmt.Printf("Session is updated to %s\n", c.cs.s.ID())
 	return true, nil
 }

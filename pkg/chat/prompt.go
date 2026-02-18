@@ -1,13 +1,12 @@
 package chat
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 )
 
-// systemPrompt describes the basic system prompt for the coding agent.
-const systemPrompt = `
+// SystemPrompt describes the basic system prompt for the coding agent.
+const SystemPrompt = `
 You are a seasoned software engineer.  Your task is to provide the technical solution
 for what the user asked.  Please follow the steps below to pursue the goal. Please
 also write your thoughts step-by-step as much as possible.
@@ -37,9 +36,7 @@ Then you write the code, and make sure that the tests now _pass_. Note that the 
 code must not be modified during this step.
 `
 
-// SystemPrompt returns the system prompt for the directory.
-func SystemPrompt(cwd string, customAgentsFile string) (string, error) {
-	customInstruction := ""
+func getCustomInstruction(cwd string, customAgentsFile string) (string, error) {
 	for _, agentsFile := range append([]string{customAgentsFile}, "AGENTS.md", "CLAUDE.md", "GEMINI.md") {
 		if agentsFile == "" {
 			continue
@@ -52,13 +49,8 @@ func SystemPrompt(cwd string, customAgentsFile string) (string, error) {
 			return "", err
 		}
 		if len(content) > 0 {
-			customInstruction = string(content)
-			break
+			return string(content), nil
 		}
 	}
-
-	if customInstruction == "" {
-		return systemPrompt, nil
-	}
-	return fmt.Sprintf("%s\n\nAlso please check the following instructions:\n%s", systemPrompt, customInstruction), nil
+	return "", nil
 }
